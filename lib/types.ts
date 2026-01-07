@@ -81,6 +81,7 @@ export interface Survey {
 export interface GrowthSurveyAnswerOption {
   text: string
   score: number | null
+  skip?: boolean // If true, skip the next question when this answer is selected
 }
 
 export interface GrowthSurveyQuestion {

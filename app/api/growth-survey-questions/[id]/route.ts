@@ -75,7 +75,7 @@ async function handlePut(
     const row = result.rows[0]
     
     let parsedTargetJobs: string[] = []
-    let parsedAnswers: { text: string; score: number | null }[] = []
+    let parsedAnswers: { text: string; score: number | null; skip?: boolean }[] = []
     
     if (row.target_jobs) {
       try {

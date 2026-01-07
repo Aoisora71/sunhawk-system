@@ -21,6 +21,7 @@ export default function GrowthSurveyPage() {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [originalAnswers, setOriginalAnswers] = useState<Record<number, string>>({})
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set())
+  const [skippedQuestions, setSkippedQuestions] = useState<Set<number>>(new Set()) // Track skipped question IDs
   const [isSaving, setIsSaving] = useState<Record<number, boolean>>({})
   const [status, setStatus] = useState({ total: 0, progress: 0 })
   const [loadingQuestions, setLoadingQuestions] = useState(true)
@@ -81,10 +82,20 @@ export default function GrowthSurveyPage() {
           const answeredSet = new Set<number>()
           const total = payload.totalQuestions || questions.length
 
+          const skippedSet = new Set<number>()
+          
           if (Array.isArray(payload.responses)) {
             payload.responses.forEach((entry) => {
               const question = questions.find((q) => q.id === entry.questionId)
               if (!question) return
+              
+              // Check if this is a skipped question
+              if (entry.answer === "スキップ" || entry.answer === "skipped") {
+                skippedSet.add(entry.questionId)
+                answeredSet.add(entry.questionId)
+                return
+              }
+              
               // Check both questionType (new) and answerType (legacy) for free text questions
               const isFreeText = question.questionType === "free_text" || question.answerType === "text"
               if (isFreeText) {
@@ -99,6 +110,8 @@ export default function GrowthSurveyPage() {
               answeredSet.add(entry.questionId)
             })
           }
+          
+          setSkippedQuestions(skippedSet)
 
           setAnswers(answersMap)
           setOriginalAnswers({ ...answersMap }) // Store original answers for change detection
@@ -164,7 +177,21 @@ export default function GrowthSurveyPage() {
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex((prev) => prev - 1)
+      // Find the previous non-skipped question
+      let prevIndex = currentQuestionIndex - 1
+      while (prevIndex >= 0) {
+        const prevQuestion = questions[prevIndex]
+        // Skip if this question was skipped
+        if (prevQuestion && !skippedQuestions.has(prevQuestion.id)) {
+          setCurrentQuestionIndex(prevIndex)
+          return
+        }
+        prevIndex--
+      }
+      // If all previous questions were skipped, just go to index 0
+      if (prevIndex < 0) {
+        setCurrentQuestionIndex(0)
+      }
       // Don't scroll to top - keep current scroll position
     }
   }
@@ -190,12 +217,49 @@ export default function GrowthSurveyPage() {
     const originalAnswer = originalAnswers[currentQuestion.id]
     const answerChanged = wasAlreadyAnswered && originalAnswer !== selectedValue
 
-    // If already answered and answer hasn't changed, just move to next question
+    // If already answered and answer hasn't changed, check skip logic and move to next question
     if (wasAlreadyAnswered && !answerChanged) {
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex((prev) => prev + 1)
-        // Don't scroll to top - keep current scroll position
+      let nextIndex = currentQuestionIndex + 1
+      let skippedQuestionId: number | null = null
+      
+      if (!isFreeTextQuestion && currentQuestion.answers && currentQuestion.answers.length > 0 && selectedValue) {
+        const selectedAnswerIndex = parseInt(selectedValue)
+        if (!isNaN(selectedAnswerIndex) && selectedAnswerIndex >= 0 && selectedAnswerIndex < currentQuestion.answers.length) {
+          const selectedAnswer = currentQuestion.answers[selectedAnswerIndex]
+          // Check if skip is true
+          if (selectedAnswer && selectedAnswer.skip === true) {
+            // Skip the next question - move to the question after next
+            nextIndex = currentQuestionIndex + 2
+            // Mark the skipped question as answered for progress calculation
+            if (nextIndex - 1 < questions.length) {
+              skippedQuestionId = questions[nextIndex - 1]?.id ?? null
+            }
+            console.log(`[Skip Logic] Question ${currentQuestionIndex + 1}, Answer index ${selectedAnswerIndex}, Skip: true, Next index: ${nextIndex}, Skipped question ID: ${skippedQuestionId}`)
+          }
+        }
       }
+      
+      // Mark skipped question as answered for progress calculation
+      if (skippedQuestionId !== null) {
+        // Mark the question as skipped
+        setSkippedQuestions((prev) => new Set(prev).add(skippedQuestionId!))
+        
+        if (!answeredQuestions.has(skippedQuestionId)) {
+          setAnsweredQuestions((prev) => new Set(prev).add(skippedQuestionId!))
+          setStatus((prev) => ({
+            ...prev,
+            progress: prev.progress + 1,
+          }))
+        }
+      }
+      
+      if (nextIndex < questions.length) {
+        setCurrentQuestionIndex(nextIndex)
+      } else if (currentQuestionIndex < questions.length - 1) {
+        // If skipping would go beyond the last question, just go to the last question
+        setCurrentQuestionIndex(questions.length - 1)
+      }
+      // Don't scroll to top - keep current scroll position
       return
     }
 
@@ -234,10 +298,81 @@ export default function GrowthSurveyPage() {
       }
 
       setAnsweredQuestions((prev) => new Set(prev).add(currentQuestion.id))
-      setStatus((prev) => ({
-        total: response.totalQuestions || prev.total || questions.length,
-        progress: response.progressCount ?? prev.progress + (wasAlreadyAnswered ? 0 : 1),
-      }))
+      
+      // Check if the selected answer has skip flag set to true
+      let nextIndex = currentQuestionIndex + 1
+      let skippedQuestionId: number | null = null
+      
+      if (!isFreeTextQuestion && currentQuestion.answers && currentQuestion.answers.length > 0 && selectedValue) {
+        const selectedAnswerIndex = parseInt(selectedValue)
+        if (!isNaN(selectedAnswerIndex) && selectedAnswerIndex >= 0 && selectedAnswerIndex < currentQuestion.answers.length) {
+          const selectedAnswer = currentQuestion.answers[selectedAnswerIndex]
+          // Check if skip is true
+          if (selectedAnswer && selectedAnswer.skip === true) {
+            // Skip the next question - move to the question after next
+            nextIndex = currentQuestionIndex + 2
+            // Mark the skipped question as answered for progress calculation
+            if (nextIndex - 1 < questions.length) {
+              skippedQuestionId = questions[nextIndex - 1]?.id ?? null
+            }
+            console.log(`[Skip Logic] Question ${currentQuestionIndex + 1}, Answer index ${selectedAnswerIndex}, Skip: true, Next index: ${nextIndex}, Skipped question ID: ${skippedQuestionId}`)
+          }
+        }
+      }
+      
+      // Save skipped question as answered in the API
+      if (skippedQuestionId !== null) {
+        // Mark the question as skipped
+        setSkippedQuestions((prev) => new Set(prev).add(skippedQuestionId!))
+        
+        try {
+          // Save skipped question with a special flag to indicate it was skipped
+          await api.growthSurveyResponses.saveQuestion(skippedQuestionId, {
+            answerValue: "skipped", // Special value to indicate skipped
+          })
+          console.log(`[Skip Logic] Saved skipped question ${skippedQuestionId} as answered`)
+        } catch (error) {
+          console.error(`[Skip Logic] Failed to save skipped question ${skippedQuestionId}:`, error)
+          // Continue even if saving skipped question fails
+        }
+      }
+      
+      // Update status - if skipped question was saved, get updated progress from API
+      // Otherwise use the response progress count
+      if (skippedQuestionId !== null) {
+        // Re-fetch progress to include the skipped question
+        try {
+          const progressResponse = await api.growthSurveyResponses.get()
+          if (progressResponse?.success && progressResponse.response) {
+            setStatus((prev) => ({
+              total: progressResponse.response!.totalQuestions || prev.total || questions.length,
+              progress: progressResponse.response!.progressCount || prev.progress,
+            }))
+          } else {
+            // Fallback to manual calculation
+            setStatus((prev) => ({
+              total: response.totalQuestions || prev.total || questions.length,
+              progress: prev.progress + (wasAlreadyAnswered ? 0 : 1) + 1, // +1 for skipped question
+            }))
+          }
+        } catch (error) {
+          // Fallback to manual calculation if API call fails
+          setStatus((prev) => ({
+            total: response.totalQuestions || prev.total || questions.length,
+            progress: prev.progress + (wasAlreadyAnswered ? 0 : 1) + 1, // +1 for skipped question
+          }))
+        }
+      } else {
+        setStatus((prev) => ({
+          total: response.totalQuestions || prev.total || questions.length,
+          progress: response.progressCount ?? prev.progress + (wasAlreadyAnswered ? 0 : 1),
+        }))
+      }
+      
+      // Mark skipped question as answered in local state
+      if (skippedQuestionId !== null) {
+        setAnsweredQuestions((prev) => new Set(prev).add(skippedQuestionId!))
+      }
 
       if (response.completed) {
         setSurveyCompleted(true)
@@ -251,8 +386,11 @@ export default function GrowthSurveyPage() {
       }, 100)
 
       // 状態の更新が完了してから次の問題に進む（スクロールは上に戻さない）
-      if (currentQuestionIndex < questions.length - 1) {
-        setCurrentQuestionIndex((prev) => prev + 1)
+      if (nextIndex < questions.length) {
+        setCurrentQuestionIndex(nextIndex)
+      } else if (currentQuestionIndex < questions.length - 1) {
+        // If skipping would go beyond the last question, just go to the last question
+        setCurrentQuestionIndex(questions.length - 1)
       }
     } catch (error: any) {
       console.error("Failed to save growth survey answer:", error)

@@ -339,11 +339,11 @@ export default function OrganizationPage() {
     }
 
     const membersByDept = new Map<string, MemberEntry[]>()
-    // Exclude admin users from organization chart
-    employees.filter((emp: any) => emp.role !== "admin").forEach((emp: any) => {
+    // Include all employees including admins in organization chart
+    employees.forEach((emp: any) => {
       const deptKey = String(emp.departmentId ?? "")
       const priority = getJobOrderMeta(emp.jobId).numeric
-      const roleWeight = emp.role === "manager" ? 1 : 2
+      const roleWeight = emp.role === "admin" ? 0 : emp.role === "manager" ? 1 : 2
       if (!membersByDept.has(deptKey)) {
         membersByDept.set(deptKey, [])
       }
@@ -359,7 +359,7 @@ export default function OrganizationPage() {
           name: emp.name || emp.email || "-",
           position: emp.jobName || "-",
           department: emp.departmentName || "-",
-          type: emp.role === "manager" ? "manager" : "employee",
+          type: emp.role === "admin" ? "executive" : emp.role === "manager" ? "manager" : "employee",
           scores: scores,
         },
       })
@@ -475,8 +475,8 @@ export default function OrganizationPage() {
       }
     >()
 
-    // Exclude admin users from position view
-    for (const e of employees.filter((emp: any) => emp.role !== "admin")) {
+    // Include all employees including admins in position view
+    for (const e of employees) {
       const key = e.jobName || "未設定"
       const { numeric, codeText, rawCode } = getJobOrderMeta(e.jobId)
 
@@ -502,7 +502,7 @@ export default function OrganizationPage() {
         name: e.name || e.email || "-",
         position: e.jobName || "-",
         department: e.departmentName || "-",
-        type: "employee",
+        type: e.role === "admin" ? "executive" : "employee",
         score: 0,
         scores: scores,
       })
