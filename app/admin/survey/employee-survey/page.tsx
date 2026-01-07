@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { DashboardNav } from "@/components/dashboard-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { SurveyProgress } from "@/components/survey-progress"
@@ -688,7 +689,9 @@ export default function EmployeeSurveyPage() {
     return (
       <div className="min-h-screen bg-background">
         <DashboardHeader />
-        <main className="p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
+        <div className="flex">
+          <DashboardNav />
+          <main className="flex-1 p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
           <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
             <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950">
               <CardContent className="pt-6">
@@ -707,7 +710,8 @@ export default function EmployeeSurveyPage() {
               </CardContent>
             </Card>
           </div>
-        </main>
+          </main>
+        </div>
       </div>
     )
   }
@@ -717,7 +721,9 @@ export default function EmployeeSurveyPage() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader />
-      <main className="p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
+      <div className="flex">
+        <DashboardNav />
+        <main className="flex-1 p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
         <div className="max-w-3xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
           {/* Header */}
           <div>
@@ -756,22 +762,6 @@ export default function EmployeeSurveyPage() {
                     </p>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    variant="default"
-                    className="w-full sm:w-auto"
-                    onClick={() => router.push("/employee-portal")}
-                  >
-                    従業員ポータルに戻る
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    onClick={() => router.push("/")}
-                  >
-                    ホームページに戻る
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           ) : (
@@ -795,9 +785,9 @@ export default function EmployeeSurveyPage() {
                 variant="outline"
                 size="sm"
                 className="text-xs"
-                onClick={() => router.push("/employee-portal")}
+                onClick={() => router.push("/admin/survey")}
               >
-                従業員ポータルに戻る
+                アンケートページに戻る
               </Button>
             </CardContent>
           </Card>
@@ -854,7 +844,8 @@ export default function EmployeeSurveyPage() {
 
           {/* 一括入力機能は削除 */}
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

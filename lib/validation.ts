@@ -107,6 +107,8 @@ export const updateSurveySchema = z.object({
   endDate: z.string().min(1, '終了日は必須です').optional(),
   status: z.enum(['active', 'completed', 'draft']).optional(),
   surveyType: z.enum(['organizational', 'growth']).optional(),
+  running: z.boolean().optional(),
+  display: z.boolean().optional(),
 })
 
 // Problem schemas
@@ -125,7 +127,14 @@ export const createProblemSchema = z.object({
 
 export const updateProblemSchema = z.object({
   questionText: z.string().min(1, '問題文は必須です').trim().optional(),
-  category: z.string().min(1, 'カテゴリは必須です').optional(),
+  category: z.union([z.string(), z.null()])
+    .transform((val) => {
+      // Empty string becomes null, non-empty strings pass through
+      return val === '' ? null : val
+    })
+    .pipe(z.union([z.string().min(1, 'カテゴリは必須です'), z.null()]))
+    .optional()
+    .nullable(),
   categoryId: z.number().int().optional().nullable(),
   questionType: z.enum(['single_choice', 'free_text']).optional(),
   answer1Score: z.union([z.string(), z.number()]).transform((val) => typeof val === 'string' ? parseFloat(val) : val).pipe(z.number()).optional(),

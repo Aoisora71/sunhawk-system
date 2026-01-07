@@ -71,6 +71,8 @@ export interface Survey {
   endDate: string
   status: 'active' | 'completed' | 'draft'
   surveyType: 'organizational' | 'growth'
+  running?: boolean
+  display?: boolean
   createdAt: string
   updatedAt: string
 }

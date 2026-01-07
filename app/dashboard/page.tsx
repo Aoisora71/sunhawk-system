@@ -169,6 +169,7 @@ export default function DashboardPage() {
       departmentCode: string | null
       jobId: number | null
       jobName: string | null
+      jobCode: string | null
       surveys: Array<{
         surveyId: number
         questions: Array<{
@@ -232,11 +233,18 @@ export default function DashboardPage() {
         return sortConfig.direction === 'asc' ? compareResult : -compareResult
       })
 
-      // 各部署内で従業員をスコア順（降順、高いスコアから）にソート
+      // 各部署内で従業員を職位コード順、その後スコア順（降順、高いスコアから）にソート
       const result: typeof filtered = []
       for (const deptName of sortedDeptNames) {
         const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
-          return b.totalScore - a.totalScore // Higher score first
+          // First sort by job code
+          const jobCodeA = a.jobCode || a.jobName || ''
+          const jobCodeB = b.jobCode || b.jobName || ''
+          if (jobCodeA !== jobCodeB) {
+            return jobCodeA.localeCompare(jobCodeB, 'ja')
+          }
+          // If job codes are the same, sort by score (higher score first)
+          return b.totalScore - a.totalScore
         })
         result.push(...deptEmployees)
       }
@@ -268,10 +276,18 @@ export default function DashboardPage() {
           return codeA.localeCompare(codeB, 'ja')
         })
 
-        // 各部署内で選択したカラムでソート
+        // 各部署内で職位コード順、その後選択したカラムでソート
         const result: typeof filtered = []
         for (const deptName of sortedDeptNames) {
           const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
+            // First sort by job code
+            const jobCodeA = a.jobCode || a.jobName || ''
+            const jobCodeB = b.jobCode || b.jobName || ''
+            if (jobCodeA !== jobCodeB) {
+              return jobCodeA.localeCompare(jobCodeB, 'ja')
+            }
+            
+            // If job codes are the same, sort by selected column
             let aVal: any
             let bVal: any
 
@@ -396,11 +412,18 @@ export default function DashboardPage() {
           return codeA.localeCompare(codeB, 'ja')
         })
 
-        // 各部署内で従業員をスコア順（降順、高いスコアから）にソート
+        // 各部署内で従業員を職位コード順、その後スコア順（降順、高いスコアから）にソート
         const result: typeof filtered = []
         for (const deptName of sortedDeptNames) {
           const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
-            return b.totalScore - a.totalScore // Higher score first
+            // First sort by job code
+            const jobCodeA = a.jobCode || a.jobName || ''
+            const jobCodeB = b.jobCode || b.jobName || ''
+            if (jobCodeA !== jobCodeB) {
+              return jobCodeA.localeCompare(jobCodeB, 'ja')
+            }
+            // If job codes are the same, sort by score (higher score first)
+            return b.totalScore - a.totalScore
           })
           result.push(...deptEmployees)
         }
@@ -739,11 +762,18 @@ export default function DashboardPage() {
         return participantSortConfig.direction === 'asc' ? compareResult : -compareResult
       })
 
-      // Sort employees within each department by total score (descending by default)
+      // Sort employees within each department by job code, then by total score (descending by default)
       const result: typeof participants = []
       for (const deptName of sortedDeptNames) {
         const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
-          return b.totalScore - a.totalScore // Higher score first
+          // First sort by job code
+          const jobCodeA = a.jobCode || a.jobName || ''
+          const jobCodeB = b.jobCode || b.jobName || ''
+          if (jobCodeA !== jobCodeB) {
+            return jobCodeA.localeCompare(jobCodeB, 'ja')
+          }
+          // If job codes are the same, sort by score (higher score first)
+          return b.totalScore - a.totalScore
         })
         result.push(...deptEmployees)
       }
@@ -775,7 +805,14 @@ export default function DashboardPage() {
         const result: typeof participants = []
         for (const deptName of sortedDeptNames) {
           const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
-            return b.totalScore - a.totalScore // Higher score first
+            // First sort by job code
+            const jobCodeA = a.jobCode || a.jobName || ''
+            const jobCodeB = b.jobCode || b.jobName || ''
+            if (jobCodeA !== jobCodeB) {
+              return jobCodeA.localeCompare(jobCodeB, 'ja')
+            }
+            // If job codes are the same, sort by score (higher score first)
+            return b.totalScore - a.totalScore
           })
           result.push(...deptEmployees)
         }
@@ -817,6 +854,14 @@ export default function DashboardPage() {
         
         for (const deptName of sortedDeptNames) {
           const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
+            // First sort by job code
+            const jobCodeA = a.jobCode || a.jobName || ''
+            const jobCodeB = b.jobCode || b.jobName || ''
+            if (jobCodeA !== jobCodeB) {
+              return jobCodeA.localeCompare(jobCodeB, 'ja')
+            }
+            
+            // If job codes are the same, sort by selected key
             let aVal: any
             let bVal: any
 
@@ -1030,7 +1075,9 @@ export default function DashboardPage() {
 
     const categoryAverages = sums.map((sum) => sum / count)
     const overall = categoryAverages.reduce((acc, v) => acc + v, 0) / categoryCount
-    return Number.isFinite(overall) ? Number(overall.toFixed(1)) : null
+    // Cap score at 100
+    const cappedOverall = overall > 100 ? 100 : overall
+    return Number.isFinite(cappedOverall) ? Number(cappedOverall.toFixed(1)) : null
   }
 
   // Helper to get latest organizational survey qualitative text (for dashboard latest result)
@@ -3751,7 +3798,38 @@ export default function DashboardPage() {
               }
               
               // Apply sorting based on sort config
-              if (detailedResponsesSortConfig.key) {
+              if (detailedResponsesSortConfig.key === 'departmentName') {
+                // Group by department and sort within each department by job code
+                const groupedByDept = filteredEmployees.reduce((acc, employee) => {
+                  const deptName = employee.departmentName || '未分類'
+                  if (!acc[deptName]) {
+                    acc[deptName] = []
+                  }
+                  acc[deptName].push(employee)
+                  return acc
+                }, {} as Record<string, typeof filteredEmployees>)
+
+                // Sort departments by code
+                const sortedDeptNames = Object.keys(groupedByDept).sort((a, b) => {
+                  const deptA = groupedByDept[a][0]
+                  const deptB = groupedByDept[b][0]
+                  const codeA = deptA.departmentCode || deptA.departmentName || ''
+                  const codeB = deptB.departmentCode || deptB.departmentName || ''
+                  const compareResult = codeA.localeCompare(codeB, 'ja')
+                  return detailedResponsesSortConfig.direction === 'asc' ? compareResult : -compareResult
+                })
+
+                // Sort employees within each department by job code
+                filteredEmployees = []
+                for (const deptName of sortedDeptNames) {
+                  const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
+                    const jobCodeA = a.jobCode || a.jobName || ''
+                    const jobCodeB = b.jobCode || b.jobName || ''
+                    return jobCodeA.localeCompare(jobCodeB, 'ja')
+                  })
+                  filteredEmployees.push(...deptEmployees)
+                }
+              } else if (detailedResponsesSortConfig.key) {
                 filteredEmployees.sort((a, b) => {
                   const firstSurveyA = a.surveys[0]
                   const firstSurveyB = b.surveys[0]
@@ -3759,17 +3837,10 @@ export default function DashboardPage() {
                   let bVal: any
                   
                   switch (detailedResponsesSortConfig.key) {
-                    case 'departmentName':
-                      aVal = groupByDepartmentDetailedResponses 
-                        ? (a.departmentCode || a.departmentName || '')
-                        : (a.departmentName || '')
-                      bVal = groupByDepartmentDetailedResponses
-                        ? (b.departmentCode || b.departmentName || '')
-                        : (b.departmentName || '')
-                      break
                     case 'jobName':
-                      aVal = a.jobName || ''
-                      bVal = b.jobName || ''
+                      // Sort by job code, fallback to job name
+                      aVal = a.jobCode || a.jobName || ''
+                      bVal = b.jobCode || b.jobName || ''
                       break
                     case 'totalScore':
                       if (firstSurveyA && firstSurveyB) {
@@ -3794,13 +3865,19 @@ export default function DashboardPage() {
                   }
                 })
               } else {
-                // Default sort: by department code (if group by department is enabled), then by name
+                // Default sort: by department code (if group by department is enabled), then by job code, then by name
                 filteredEmployees.sort((a, b) => {
                   if (groupByDepartmentDetailedResponses) {
                     const aCode = a.departmentCode || a.departmentName || ''
                     const bCode = b.departmentCode || b.departmentName || ''
                     if (aCode !== bCode) {
                       return aCode.localeCompare(bCode, 'ja')
+                    }
+                    // Within same department, sort by job code
+                    const jobCodeA = a.jobCode || a.jobName || ''
+                    const jobCodeB = b.jobCode || b.jobName || ''
+                    if (jobCodeA !== jobCodeB) {
+                      return jobCodeA.localeCompare(jobCodeB, 'ja')
                     }
                   }
                   return a.employeeName.localeCompare(b.employeeName, 'ja')

@@ -181,7 +181,8 @@ export function ProblemBankSection() {
           problemData.categoryId = categoryId
         }
       } else if (editingProblem.questionType === "free_text") {
-        problemData.category = ""
+        // For free_text questions, don't send category field or send null
+        // The API will handle setting it to null
       }
       
       // Add answer scores

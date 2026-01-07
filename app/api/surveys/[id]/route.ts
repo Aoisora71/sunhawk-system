@@ -19,8 +19,21 @@ async function handleGet(
   try {
     const { id } = await context.params
 
+    // Check if running and display columns exist
+    const columnCheck = await query<{ column_name: string }>(
+      `SELECT column_name 
+       FROM information_schema.columns 
+       WHERE table_name = 'surveys' 
+         AND column_name IN ('running', 'display')`
+    )
+    const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
+    const hasDisplay = columnCheck.rows.some(r => r.column_name === 'display')
+
+    const runningSelect = hasRunning ? ', running' : ', true as running'
+    const displaySelect = hasDisplay ? ', display' : ', true as display'
+
     const result = await query(
-      `SELECT id, name, start_date, end_date, status, survey_type, created_at, updated_at
+      `SELECT id, name, start_date, end_date, status, survey_type, created_at, updated_at${runningSelect}${displaySelect}
        FROM surveys
        WHERE id = $1`,
       [id]
@@ -40,6 +53,8 @@ async function handleGet(
         endDate: survey.end_date,
         status: survey.status as 'active' | 'completed' | 'draft',
         surveyType: normalizeSurveyType(survey.survey_type) as 'organizational' | 'growth',
+        running: (survey as any).running !== undefined ? Boolean((survey as any).running) : true,
+        display: (survey as any).display !== undefined ? Boolean((survey as any).display) : true,
         createdAt: survey.created_at,
         updatedAt: survey.updated_at,
       },
@@ -65,8 +80,67 @@ async function handlePut(
       return badRequestResponse(validation.error)
     }
 
-    const { name, startDate, endDate, status, surveyType } = validation.data
-    const normalizedType = normalizeSurveyType(surveyType)
+    const { name, startDate, endDate, status, surveyType, running, display } = validation.data
+
+    // Check if running and display columns exist
+    const columnCheck = await query<{ column_name: string }>(
+      `SELECT column_name 
+       FROM information_schema.columns 
+       WHERE table_name = 'surveys' 
+         AND column_name IN ('running', 'display')`
+    )
+    const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
+    const hasDisplay = columnCheck.rows.some(r => r.column_name === 'display')
+
+    // Build update clause dynamically - only update fields that are provided
+    const updates: string[] = []
+    const params: any[] = []
+    let paramIndex = 1
+
+    if (name !== undefined) {
+      updates.push(`name = $${paramIndex++}`)
+      params.push(name?.trim() || null)
+    }
+    if (startDate !== undefined) {
+      updates.push(`start_date = $${paramIndex++}`)
+      params.push(startDate)
+    }
+    if (endDate !== undefined) {
+      updates.push(`end_date = $${paramIndex++}`)
+      params.push(endDate)
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${paramIndex++}`)
+      params.push(status || "active")
+    }
+    if (surveyType !== undefined) {
+      const normalizedType = normalizeSurveyType(surveyType)
+      updates.push(`survey_type = $${paramIndex++}`)
+      params.push(normalizedType)
+    }
+    if (hasRunning && running !== undefined) {
+      updates.push(`running = $${paramIndex++}`)
+      params.push(running)
+    }
+    if (hasDisplay && display !== undefined) {
+      updates.push(`display = $${paramIndex++}`)
+      params.push(display)
+    }
+
+    // Check if there are any field updates before adding updated_at
+    if (updates.length === 0) {
+      return badRequestResponse("更新するフィールドが指定されていません")
+    }
+
+    // Always update updated_at
+    updates.push(`updated_at = CURRENT_TIMESTAMP`)
+
+    // Add id for WHERE clause
+    params.push(id)
+    const whereParamIndex = paramIndex
+
+    const runningSelect = hasRunning ? ', running' : ', true as running'
+    const displaySelect = hasDisplay ? ', display' : ', true as display'
 
     const result = await query<{
       id: number
@@ -79,10 +153,10 @@ async function handlePut(
       updated_at: string
     }>(
       `UPDATE surveys 
-       SET name = $1, start_date = $2, end_date = $3, status = $4, survey_type = $5, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $6
-       RETURNING id, name, start_date, end_date, status, survey_type, created_at, updated_at`,
-      [name?.trim() || null, startDate, endDate, status || "active", normalizedType, id]
+       SET ${updates.join(', ')}
+       WHERE id = $${whereParamIndex}
+       RETURNING id, name, start_date, end_date, status, survey_type, created_at, updated_at${runningSelect}${displaySelect}`,
+      params
     )
 
     if (result.rows.length === 0) {
@@ -99,6 +173,8 @@ async function handlePut(
         endDate: survey.end_date,
         status: survey.status as 'active' | 'completed' | 'draft',
         surveyType: normalizeSurveyType(survey.survey_type) as 'organizational' | 'growth',
+        running: (survey as any).running !== undefined ? Boolean((survey as any).running) : true,
+        display: (survey as any).display !== undefined ? Boolean((survey as any).display) : true,
         createdAt: survey.created_at,
         updatedAt: survey.updated_at,
       },

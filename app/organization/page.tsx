@@ -290,7 +290,9 @@ export default function OrganizationPage() {
           if (validSummaries.length > 0) {
             const total = validSummaries.reduce((acc: number, s: any) => acc + (s.totalScore ?? 0), 0)
             const avg = total / validSummaries.length
-            setCurrentOrgAverageScore(Number.isFinite(avg) ? Number(avg.toFixed(1)) : null)
+            // Cap score at 100
+            const cappedAvg = avg > 100 ? 100 : avg
+            setCurrentOrgAverageScore(Number.isFinite(cappedAvg) ? Number(cappedAvg.toFixed(1)) : null)
           } else {
             setCurrentOrgAverageScore(null)
           }
@@ -306,7 +308,9 @@ export default function OrganizationPage() {
           if (validSummaries.length > 0) {
             const total = validSummaries.reduce((acc: number, s: any) => acc + (s.totalScore ?? 0), 0)
             const avg = total / validSummaries.length
-            setPreviousOrgAverageScore(Number.isFinite(avg) ? Number(avg.toFixed(1)) : null)
+            // Cap score at 100
+            const cappedAvg = avg > 100 ? 100 : avg
+            setPreviousOrgAverageScore(Number.isFinite(cappedAvg) ? Number(cappedAvg.toFixed(1)) : null)
           } else {
             setPreviousOrgAverageScore(null)
           }
@@ -335,10 +339,11 @@ export default function OrganizationPage() {
     }
 
     const membersByDept = new Map<string, MemberEntry[]>()
-    employees.forEach((emp: any) => {
+    // Exclude admin users from organization chart
+    employees.filter((emp: any) => emp.role !== "admin").forEach((emp: any) => {
       const deptKey = String(emp.departmentId ?? "")
       const priority = getJobOrderMeta(emp.jobId).numeric
-      const roleWeight = emp.role === "admin" ? 0 : emp.role === "manager" ? 1 : 2
+      const roleWeight = emp.role === "manager" ? 1 : 2
       if (!membersByDept.has(deptKey)) {
         membersByDept.set(deptKey, [])
       }
@@ -354,7 +359,7 @@ export default function OrganizationPage() {
           name: emp.name || emp.email || "-",
           position: emp.jobName || "-",
           department: emp.departmentName || "-",
-          type: emp.role === "admin" ? "executive" : emp.role === "manager" ? "manager" : "employee",
+          type: emp.role === "manager" ? "manager" : "employee",
           scores: scores,
         },
       })
@@ -402,6 +407,7 @@ export default function OrganizationPage() {
       const employeeChildren = memberEntries
         .filter((entry) => !managerId || entry.id !== managerId)
         .sort((a, b) => {
+          // First sort by job code (priority - numeric value of job code), then by name
           if (a.priority !== b.priority) return a.priority - b.priority
           return (a.employee.name || "").localeCompare(b.employee.name || "")
         })
@@ -469,7 +475,8 @@ export default function OrganizationPage() {
       }
     >()
 
-    for (const e of employees) {
+    // Exclude admin users from position view
+    for (const e of employees.filter((emp: any) => emp.role !== "admin")) {
       const key = e.jobName || "未設定"
       const { numeric, codeText, rawCode } = getJobOrderMeta(e.jobId)
 
@@ -495,7 +502,7 @@ export default function OrganizationPage() {
         name: e.name || e.email || "-",
         position: e.jobName || "-",
         department: e.departmentName || "-",
-        type: e.role === "admin" ? "executive" : "employee",
+        type: "employee",
         score: 0,
         scores: scores,
       })
@@ -512,9 +519,22 @@ export default function OrganizationPage() {
       .map(([pos, data]) => ({
         position: pos,
         code: data.codeLabel,
-        members: data.members.sort((a, b) => (a.name || "").localeCompare(b.name || "")),
+        members: data.members.sort((a, b) => {
+          // Sort by department code first, then by name
+          const deptA = a.department || ""
+          const deptB = b.department || ""
+          // Get department code from departments array
+          const deptAObj = departments.find((d: any) => d.name === deptA)
+          const deptBObj = departments.find((d: any) => d.name === deptB)
+          const codeA = deptAObj?.code || deptA
+          const codeB = deptBObj?.code || deptB
+          if (codeA !== codeB) {
+            return codeA.localeCompare(codeB, 'ja')
+          }
+          return (a.name || "").localeCompare(b.name || "")
+        }),
       }))
-  }, [employees, jobOrderMap, employeeScores])
+  }, [employees, jobOrderMap, employeeScores, departments])
 
   const totalEmployees = employees.length
 
@@ -550,22 +570,6 @@ export default function OrganizationPage() {
     return count
   }, [departments])
 
-  const ceo: OrgEmployee = useMemo(() => {
-    // Pick an admin user as CEO fallback; otherwise a placeholder
-    const admin = employees.find((e) => e.role === "admin")
-    // Ensure admin.id is treated as number for lookup
-    const adminIdNum = admin ? (typeof admin.id === 'string' ? Number(admin.id) : admin.id) : null
-    const scores = adminIdNum ? (employeeScores.get(adminIdNum) || { currentScore: null, pastScores: [] }) : { currentScore: null, pastScores: [] }
-    return {
-      id: admin?.id ? String(admin.id) : "ceo",
-      name: admin?.name || "管理者",
-      position: admin?.jobName || "管理者",
-      department: admin?.departmentName || "経営",
-      type: "executive",
-      score: 0,
-      scores: scores,
-    }
-  }, [employees, employeeScores])
 
   // Show loading state while checking authorization
   if (isAuthorized === null) {
@@ -687,13 +691,11 @@ export default function OrganizationPage() {
                   </CardHeader>
                   <CardContent className="p-2 sm:p-3 md:p-6 overflow-x-auto">
                     <div className="min-w-max md:min-w-full pb-2 sm:pb-3 md:pb-4">
-                      <OrgTreeNode employee={ceo} level={0} hasChildren={departmentTree.length > 0}>
-                        <div className="mt-2 sm:mt-3 md:mt-6 space-y-2 sm:space-y-3 md:space-y-6">
-                          {departmentTree.map((branch, index) =>
-                            renderBranch(branch, 1, index === departmentTree.length - 1),
-                          )}
-                        </div>
-                      </OrgTreeNode>
+                      <div className="space-y-2 sm:space-y-3 md:space-y-6">
+                        {departmentTree.map((branch, index) =>
+                          renderBranch(branch, 0, index === departmentTree.length - 1),
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

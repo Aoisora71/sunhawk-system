@@ -95,11 +95,30 @@ export async function getUserJobName(userId: number): Promise<string | null> {
   return result.rows[0]?.job_name ?? null
 }
 
+export async function getUserRole(userId: number): Promise<string | null> {
+  const result = await query<{ role: string | null }>(
+    `SELECT role FROM users WHERE id = $1`,
+    [userId],
+  )
+  return result.rows[0]?.role ?? null
+}
+
 export async function getAccessibleGrowthSurveyQuestions(
   userId: number,
   options: { activeOnly?: boolean } = {},
 ): Promise<GrowthSurveyQuestion[]> {
   const questions = await fetchGrowthSurveyQuestions()
+  const userRole = await getUserRole(userId)
+  
+  // Admin users can access all questions regardless of targetJobs
+  if (userRole === 'admin') {
+    const { activeOnly = false } = options
+    if (activeOnly) {
+      return questions.filter((question) => question.isActive)
+    }
+    return questions
+  }
+  
   const jobName = await getUserJobName(userId)
   return filterGrowthSurveyQuestionsByJob(questions, jobName, options)
 }
@@ -121,6 +140,16 @@ export async function getGrowthSurveyQuestionForUser(
 }
 
 export async function getActiveGrowthSurvey() {
+  // Check if running column exists
+  const columnCheck = await query<{ column_name: string }>(
+    `SELECT column_name 
+     FROM information_schema.columns 
+     WHERE table_name = 'surveys' 
+       AND column_name = 'running'`
+  )
+  const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
+  const runningFilter = hasRunning ? ' AND (running IS NULL OR running = true)' : ''
+
   // Use CURRENT_DATE to handle date comparisons correctly
   // Using ::date cast ensures we compare only the date part, ignoring time components
   // end_date >= CURRENT_DATE means end_date is today or later (surveys ending today are still active)
@@ -138,6 +167,7 @@ export async function getActiveGrowthSurvey() {
        AND survey_type = 'growth'
        AND start_date::date <= CURRENT_DATE
        AND end_date::date >= CURRENT_DATE
+       ${runningFilter}
      ORDER BY created_at DESC
      LIMIT 1`,
   )
