@@ -2,16 +2,8 @@
 import type { SurveyResultItem } from "./types"
 
 /**
- * Cap a score at 100 (round down any score exceeding 100 to 100)
- */
-function capScoreAt100(score: number): number {
-  return score > 100 ? 100 : score
-}
-
-/**
  * Calculate category scores from survey response items
  * Returns an object with category scores (1-8) and total score (average of all categories)
- * All scores are capped at 100
  */
 export function calculateCategoryScores(response: SurveyResultItem[]): {
   category1Score: number
@@ -49,17 +41,16 @@ export function calculateCategoryScores(response: SurveyResultItem[]): {
   const sumOfAllCategories = Object.values(categorySums).reduce((sum, score) => sum + score, 0)
   const totalScore = sumOfAllCategories / 8
 
-  // Cap all scores at 100
   return {
-    category1Score: capScoreAt100(Number(categorySums[1].toFixed(2))),
-    category2Score: capScoreAt100(Number(categorySums[2].toFixed(2))),
-    category3Score: capScoreAt100(Number(categorySums[3].toFixed(2))),
-    category4Score: capScoreAt100(Number(categorySums[4].toFixed(2))),
-    category5Score: capScoreAt100(Number(categorySums[5].toFixed(2))),
-    category6Score: capScoreAt100(Number(categorySums[6].toFixed(2))),
-    category7Score: capScoreAt100(Number(categorySums[7].toFixed(2))),
-    category8Score: capScoreAt100(Number(categorySums[8].toFixed(2))),
-    totalScore: capScoreAt100(Number(totalScore.toFixed(2))),
+    category1Score: Number(categorySums[1].toFixed(2)),
+    category2Score: Number(categorySums[2].toFixed(2)),
+    category3Score: Number(categorySums[3].toFixed(2)),
+    category4Score: Number(categorySums[4].toFixed(2)),
+    category5Score: Number(categorySums[5].toFixed(2)),
+    category6Score: Number(categorySums[6].toFixed(2)),
+    category7Score: Number(categorySums[7].toFixed(2)),
+    category8Score: Number(categorySums[8].toFixed(2)),
+    totalScore: Number(totalScore.toFixed(2)),
   }
 }
 

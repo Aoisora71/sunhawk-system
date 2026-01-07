@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { flushSync } from "react-dom"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,10 +16,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Calendar, CheckCircle2, XCircle, Clock, RefreshCw, Play, Pause, Eye, EyeOff, Edit, Trash2 } from "lucide-react"
+import { Plus, Calendar, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react"
 import api from "@/lib/api-client"
 import { toast } from "@/lib/toast"
 import type { Survey } from "@/lib/types"
+
 const SURVEY_TYPE_OPTIONS = [
   { value: "organizational", label: "ソシキサーベイ" },
   { value: "growth", label: "グロースサーベイ" },
@@ -43,23 +43,26 @@ export function SurveyPeriodSection() {
     surveyType: "organizational",
   })
 
-  const fetchSurveys = useCallback(async () => {
+  useEffect(() => {
+    fetchSurveys()
+  }, [])
+
+  const fetchSurveys = async () => {
     try {
+      setIsLoading(true)
       const response = await api.surveys.list()
       if (response?.success && response.surveys) {
         setSurveys(response.surveys)
+      } else {
+        setSurveys([])
       }
     } catch (error: any) {
-      console.error("Error fetching surveys:", error)
-      toast.error("サーベイ一覧の取得に失敗しました")
+            toast.error("サーベイ一覧の取得に失敗しました")
+      setSurveys([])
     } finally {
       setIsLoading(false)
     }
-  }, [])
-
-  useEffect(() => {
-    fetchSurveys()
-  }, [fetchSurveys])
+  }
 
   const handleCreateSurvey = async () => {
     if (!newSurvey.name || !newSurvey.startDate || !newSurvey.endDate || !newSurvey.surveyType) {
@@ -84,12 +87,12 @@ export function SurveyPeriodSection() {
         toast.success("サーベイ期間を設定しました")
         setIsAddSurveyOpen(false)
         setNewSurvey({ name: "", startDate: "", endDate: "", surveyType: "organizational" })
-        await fetchSurveys();
+        fetchSurveys()
       } else {
         toast.error(response?.error || "サーベイ期間の設定に失敗しました")
       }
     } catch (error: any) {
-      toast.error("サーベイ期間の設定に失敗しました")
+            toast.error("サーベイ期間の設定に失敗しました")
     }
   }
 
@@ -122,12 +125,12 @@ export function SurveyPeriodSection() {
       if (response?.success) {
         toast.success("サーベイ期間を更新しました")
         setEditingSurvey(null)
-        await fetchSurveys();
+        fetchSurveys()
       } else {
         toast.error(response?.error || "サーベイ期間の更新に失敗しました")
       }
     } catch (error: any) {
-      toast.error("サーベイ期間の更新に失敗しました")
+            toast.error("サーベイ期間の更新に失敗しました")
     }
   }
 
@@ -137,48 +140,12 @@ export function SurveyPeriodSection() {
       const response = await api.surveys.delete(surveyId)
       if (response?.success) {
         toast.success("サーベイ期間を削除しました")
-        await fetchSurveys();
+        fetchSurveys()
       } else {
         toast.error(response?.error || "サーベイ期間の削除に失敗しました")
       }
     } catch (error: any) {
-      toast.error("サーベイ期間の削除に失敗しました")
-    }
-  }
-
-  const handleToggleRunning = async (survey: Survey) => {
-    try {
-      const newRunning = !(survey.running ?? true)
-      const response = await api.surveys.update(String(survey.id), {
-        running: newRunning,
-      })
-
-      if (response?.success && response.survey) {
-        toast.success(newRunning ? "サーベイを開始しました" : "サーベイを停止しました")
-        await fetchSurveys();
-      } else {
-        toast.error(response?.error || "サーベイの状態更新に失敗しました")
-      }
-    } catch (error: any) {
-      toast.error("サーベイの状態更新に失敗しました")
-    }
-  }
-
-  const handleToggleDisplay = async (survey: Survey) => {
-    try {
-      const newDisplay = !(survey.display ?? true)
-      const response = await api.surveys.update(String(survey.id), {
-        display: newDisplay,
-      })
-
-      if (response?.success && response.survey) {
-        toast.success(newDisplay ? "サーベイを表示しました" : "サーベイを非表示にしました")
-        await fetchSurveys();
-      } else {
-        toast.error(response?.error || "サーベイの表示状態更新に失敗しました")
-      }
-    } catch (error: any) {
-      toast.error("サーベイの表示状態更新に失敗しました")
+            toast.error("サーベイ期間の削除に失敗しました")
     }
   }
 
@@ -226,26 +193,7 @@ export function SurveyPeriodSection() {
   }
 
   const handleRefresh = async () => {
-    try {
-      setIsLoading(true)
-      const response = await api.surveys.list()
-      if (response?.success && response.surveys) {
-        flushSync(() => {
-          setSurveys(response.surveys)
-        })
-      } else {
-        flushSync(() => {
-          setSurveys([])
-        })
-      }
-    } catch (error: any) {
-      toast.error("サーベイ一覧の取得に失敗しました")
-      flushSync(() => {
-        setSurveys([])
-      })
-    } finally {
-      setIsLoading(false)
-    }
+    await fetchSurveys()
   }
 
   return (
@@ -362,15 +310,13 @@ export function SurveyPeriodSection() {
                 <TableHead className="text-xs sm:text-sm whitespace-nowrap">開始日</TableHead>
                 <TableHead className="text-xs sm:text-sm whitespace-nowrap">終了日</TableHead>
                 <TableHead className="text-xs sm:text-sm whitespace-nowrap">ステータス</TableHead>
-                <TableHead className="text-center text-xs sm:text-sm whitespace-nowrap">実行/停止</TableHead>
-                <TableHead className="text-center text-xs sm:text-sm whitespace-nowrap">表示/非表示</TableHead>
                 <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">操作</TableHead>
               </TableRow>
             </TableHeader>
           <TableBody>
             {surveys.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   サーベイ期間が設定されていません
                 </TableCell>
               </TableRow>
@@ -403,36 +349,6 @@ export function SurveyPeriodSection() {
                       <Badge variant="outline">非アクティブ</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleToggleRunning(survey)}
-                      className="h-8 w-8 p-0"
-                      title={survey.running ?? true ? "停止" : "開始"}
-                    >
-                      {survey.running ?? true ? (
-                        <Pause className="h-4 w-4" />
-                      ) : (
-                        <Play className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleToggleDisplay(survey)}
-                      className="h-8 w-8 p-0"
-                      title={survey.display ?? true ? "非表示" : "表示"}
-                    >
-                      {survey.display ?? true ? (
-                        <Eye className="h-4 w-4" />
-                      ) : (
-                        <EyeOff className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1 sm:gap-2">
                       <Button
@@ -444,19 +360,17 @@ export function SurveyPeriodSection() {
                             surveyType: survey.surveyType || "organizational",
                           })
                         }
-                        className="h-8 w-8 p-0"
-                        title="編集"
+                        className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                       >
-                        <Edit className="h-4 w-4" />
+                        編集
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteSurvey(String(survey.id))}
-                        className="h-8 w-8 p-0"
-                        title="削除"
+                        className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        削除
                       </Button>
                     </div>
                   </TableCell>

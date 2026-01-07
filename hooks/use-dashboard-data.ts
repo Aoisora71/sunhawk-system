@@ -46,10 +46,8 @@ function computeOrganizationalOverallScore(rows: any[]): number | null {
 
   const categoryAverages = sums.map((sum) => sum / count)
   const overall = categoryAverages.reduce((a, b) => a + b, 0) / categoryCount
-  // Cap score at 100
-  const cappedOverall = overall > 100 ? 100 : overall
 
-  return cappedOverall
+  return overall
 }
 
 interface DashboardData {

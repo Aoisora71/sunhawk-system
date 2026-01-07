@@ -455,7 +455,9 @@ export default function EmployeeSurveyPage() {
 
       // Show success message if answer was changed
       if (answerChanged) {
+        setTimeout(() => {
         toast.success("回答を更新しました")
+        }, 1000)
         // Update original answer to reflect the change
         setOriginalAnswers((prev) => ({
           ...prev,
@@ -467,7 +469,9 @@ export default function EmployeeSurveyPage() {
           ...prev,
           [currentQuestion.id]: currentAnswer,
         }))
-        toast.success("回答を保存しました")
+        setTimeout(() => {
+          toast.success("回答を保存しました")
+        }, 1000)
       }
 
       // Mark as answered and check completion
@@ -480,9 +484,11 @@ export default function EmployeeSurveyPage() {
             surveyQuestions.every((q) => newSet.has(q.id))
           
           if (allQuestionsAnswered) {
-            setSurveyCompleted(true)
-            setCompletedAt(new Date().toISOString())
-            toast.success("すべての質問に回答いただき、ありがとうございました")
+            setTimeout(() => {
+              setSurveyCompleted(true)
+              setCompletedAt(new Date().toISOString())
+              toast.success("すべての質問に回答いただき、ありがとうございました")
+            }, 100)
           }
         }
         

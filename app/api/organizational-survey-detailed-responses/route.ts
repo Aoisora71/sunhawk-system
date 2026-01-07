@@ -128,7 +128,6 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       department_code: string | null
       job_id: number | null
       job_name: string | null
-      job_code: string | null
     }>(
       `SELECT 
         u.id,
@@ -138,8 +137,7 @@ async function handleGet(request: NextRequest, user: AdminUser) {
         d.name as department_name,
         d.code as department_code,
         u.job_id,
-        j.name as job_name,
-        j.code as job_code
+        j.name as job_name
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       LEFT JOIN jobs j ON u.job_id = j.id
@@ -157,7 +155,6 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       departmentCode: row.department_code || null,
       jobId: row.job_id ? Number(row.job_id) : null,
       jobName: row.job_name || null,
-      jobCode: row.job_code || null,
     }))
 
     // Get single choice responses for selected surveys
@@ -273,7 +270,6 @@ async function handleGet(request: NextRequest, user: AdminUser) {
         departmentCode: employee.departmentCode,
         jobId: employee.jobId,
         jobName: employee.jobName,
-        jobCode: employee.jobCode,
         surveys: surveyResponses,
       }
     })

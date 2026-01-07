@@ -13,7 +13,6 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     const { searchParams } = new URL(request.url)
     const surveyId = searchParams.get("surveyId")
     const userId = searchParams.get("userId") // For admin to get specific user's responses
-    const allUsers = searchParams.get("allUsers") === "true" // For admin to view all users' responses
 
     if (!surveyId) {
       return badRequestResponse("surveyIdは必須です")
@@ -25,9 +24,7 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     }
 
     // Get free text responses for this user and survey
-    // Filter by user ID:
-    // - Regular users: always their own
-    // - Admins: their own by default, unless allUsers=true or userId is specified
+    // Admin can see all or specific user's, regular users only their own
     let queryText = `
       SELECT 
         osftr.uid,
@@ -45,22 +42,15 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     const params: any[] = [surveyIdNum]
     let paramIndex = 2
 
-    if (user.role === "admin") {
-      if (userId) {
-        // Admin requesting specific user's responses
-        const userIdNum = parseInt(userId, 10)
-        if (isNaN(userIdNum)) {
-          return badRequestResponse("無効なuserIdです")
-        }
-        queryText += ` AND osftr.uid = $${paramIndex++}`
-        params.push(userIdNum)
-      } else if (!allUsers) {
-        // Admin participating in survey - show only their own responses
-        queryText += ` AND osftr.uid = $${paramIndex++}`
-        params.push(user.userId)
+    if (user.role === "admin" && userId) {
+      // Admin requesting specific user's responses
+      const userIdNum = parseInt(userId, 10)
+      if (isNaN(userIdNum)) {
+        return badRequestResponse("無効なuserIdです")
       }
-      // If allUsers=true, don't filter by userId (show all)
-    } else {
+      queryText += ` AND osftr.uid = $${paramIndex++}`
+      params.push(userIdNum)
+    } else if (user.role !== "admin") {
       // Regular user can only see their own
       queryText += ` AND osftr.uid = $${paramIndex++}`
       params.push(user.userId)
