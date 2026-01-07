@@ -99,6 +99,8 @@ export default function ReportsPage() {
           if (!bucket.summaries.length) return
           const total = bucket.summaries.reduce((acc, s) => acc + (Number(s.totalScore ?? s.total_score ?? 0) || 0), 0)
           const avg = total / bucket.summaries.length
+          // Cap score at 100
+          const cappedAvg = avg > 100 ? 100 : avg
           const d = bucket.startDate ? new Date(bucket.startDate) : null
           const label =
             d != null
@@ -106,7 +108,7 @@ export default function ReportsPage() {
               : `ID:${sid}`
           historical.push({
             month: label,
-            score: Number(avg.toFixed(1)),
+            score: Number(cappedAvg.toFixed(1)),
           })
         })
 
@@ -148,15 +150,16 @@ export default function ReportsPage() {
             sums[8] += Number(r.category8Score ?? r.category8_score ?? 0)
           })
 
+          // Cap all category averages at 100
           return {
-            1: sums[1] / count,
-            2: sums[2] / count,
-            3: sums[3] / count,
-            4: sums[4] / count,
-            5: sums[5] / count,
-            6: sums[6] / count,
-            7: sums[7] / count,
-            8: sums[8] / count,
+            1: Math.min(100, sums[1] / count),
+            2: Math.min(100, sums[2] / count),
+            3: Math.min(100, sums[3] / count),
+            4: Math.min(100, sums[4] / count),
+            5: Math.min(100, sums[5] / count),
+            6: Math.min(100, sums[6] / count),
+            7: Math.min(100, sums[7] / count),
+            8: Math.min(100, sums[8] / count),
           }
         }
 
@@ -261,8 +264,11 @@ export default function ReportsPage() {
 
             deptAgg.forEach((v, key) => {
               if (v.count > 0) {
+                const avg = v.sum / v.count
+                // Cap score at 100
+                const cappedAvg = avg > 100 ? 100 : avg
                 result.set(key, {
-                  avg: Number((v.sum / v.count).toFixed(1)),
+                  avg: Number(cappedAvg.toFixed(1)),
                   codeNum: v.codeNum,
                 })
               }

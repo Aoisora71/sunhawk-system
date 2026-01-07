@@ -71,6 +71,8 @@ export interface Survey {
   endDate: string
   status: 'active' | 'completed' | 'draft'
   surveyType: 'organizational' | 'growth'
+  running?: boolean
+  display?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -79,6 +81,7 @@ export interface Survey {
 export interface GrowthSurveyAnswerOption {
   text: string
   score: number | null
+  skip?: boolean // If true, skip the next question when this answer is selected
 }
 
 export interface GrowthSurveyQuestion {

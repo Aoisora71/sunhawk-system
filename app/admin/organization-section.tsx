@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, type ChangeEvent } from "react"
+import { useState, useEffect, useRef, useMemo, type ChangeEvent } from "react"
 import * as XLSX from "xlsx"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Edit, Trash2, Building2, Briefcase, Users, Key, Download, Upload } from "lucide-react"
+import { Plus, Edit, Trash2, Building2, Briefcase, Users, Key, Download, Upload, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/lib/toast"
 
@@ -41,6 +41,13 @@ export function OrganizationSection() {
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<any>(null)
   const xlsxInputRef = useRef<HTMLInputElement | null>(null)
+  const [employeeSortConfig, setEmployeeSortConfig] = useState<{
+    key: 'departmentCode' | 'name' | 'departmentName' | 'jobName' | 'yearsOfService' | 'role'
+    direction: 'asc' | 'desc'
+  }>({
+    key: 'departmentCode',
+    direction: 'asc',
+  })
   const [newEmployee, setNewEmployee] = useState({
     name: "",
     email: "",
@@ -67,6 +74,7 @@ export function OrganizationSection() {
         headers: { 
           "Content-Type": "application/json",
         },
+        cache: "no-cache",
       })
       
       if (!response.ok) {
@@ -187,6 +195,7 @@ export function OrganizationSection() {
         headers: { 
           "Content-Type": "application/json",
         },
+        cache: "no-cache",
       })
       
       if (!response.ok) {
@@ -296,7 +305,9 @@ export function OrganizationSection() {
   const fetchEmployees = async () => {
     try {
       // Cookies are automatically sent with requests
-      const response = await fetch("/api/employees")
+      const response = await fetch("/api/employees", {
+        cache: "no-cache",
+      })
       if (!response.ok) {
         let errorData: any = {}
         try {
@@ -318,6 +329,108 @@ export function OrganizationSection() {
     } catch (error) {
             toast.error("従業員データの取得中にエラーが発生しました")
     }
+  }
+
+  // Sort employees based on sortConfig
+  const sortedEmployees = useMemo(() => {
+    const { key, direction } = employeeSortConfig
+
+    // If sorting by department, group by department and sort within each department by job code
+    if (key === 'departmentCode' || key === 'departmentName') {
+      const groupedByDept = employees.reduce((acc, emp) => {
+        const deptKey = emp.departmentCode || emp.departmentName || '未分類'
+        if (!acc[deptKey]) {
+          acc[deptKey] = []
+        }
+        acc[deptKey].push(emp)
+        return acc
+      }, {} as Record<string, typeof employees>)
+
+      // Sort departments by code
+      const sortedDeptNames = Object.keys(groupedByDept).sort((a, b) => {
+        const deptA = groupedByDept[a][0]
+        const deptB = groupedByDept[b][0]
+        const codeA = deptA.departmentCode || deptA.departmentName || ''
+        const codeB = deptB.departmentCode || deptB.departmentName || ''
+        const compareResult = codeA.localeCompare(codeB, 'ja')
+        return direction === 'asc' ? compareResult : -compareResult
+      })
+
+      // Sort employees within each department by job code
+      const result: typeof employees = []
+      for (const deptName of sortedDeptNames) {
+        const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
+          // First sort by job code
+          const jobCodeA = a.jobCode || a.jobName || ''
+          const jobCodeB = b.jobCode || b.jobName || ''
+          if (jobCodeA !== jobCodeB) {
+            return jobCodeA.localeCompare(jobCodeB, 'ja')
+          }
+          // If job codes are the same, sort by name
+          return (a.name || '').localeCompare(b.name || '')
+        })
+        result.push(...deptEmployees)
+      }
+      return result
+    }
+
+    // For other sort keys, apply normal sorting
+    const sorted = [...employees]
+    sorted.sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (key) {
+        case 'name':
+          aVal = a.name || ''
+          bVal = b.name || ''
+          break
+        case 'jobName':
+          // Sort by job code, fallback to job name
+          aVal = a.jobCode || a.jobName || ''
+          bVal = b.jobCode || b.jobName || ''
+          break
+        case 'yearsOfService':
+          aVal = a.yearsOfService !== null && a.yearsOfService !== undefined ? Number(a.yearsOfService) : -1
+          bVal = b.yearsOfService !== null && b.yearsOfService !== undefined ? Number(b.yearsOfService) : -1
+          break
+        case 'role':
+          const roleOrder: Record<string, number> = { admin: 0, employee: 1, none: 2 }
+          aVal = roleOrder[a.role] ?? 2
+          bVal = roleOrder[b.role] ?? 2
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return direction === 'asc' 
+          ? aVal.localeCompare(bVal, 'ja')
+          : bVal.localeCompare(aVal, 'ja')
+      } else {
+        return direction === 'asc' 
+          ? (aVal as number) - (bVal as number)
+          : (bVal as number) - (aVal as number)
+      }
+    })
+
+    return sorted
+  }, [employees, employeeSortConfig])
+
+  const handleEmployeeSort = (key: typeof employeeSortConfig.key) => {
+    setEmployeeSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  const getSortIcon = (key: typeof employeeSortConfig.key) => {
+    if (employeeSortConfig.key !== key) {
+      return <ArrowUpDown className="ml-1 h-3 w-3" />
+    }
+    return employeeSortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 h-3 w-3" />
+      : <ArrowDown className="ml-1 h-3 w-3" />
   }
 
   const handleCreateEmployee = async () => {
@@ -458,7 +571,7 @@ const EMPLOYEE_HEADERS = [
     "部門名",
     "職位名",
     "権限",
-    "服務年限",
+    "勤続年数",
     "住所",
   ]
 
@@ -542,7 +655,7 @@ const EMPLOYEE_HEADERS = [
         "部門名": "departmentName",
         "職位名": "jobName",
         "権限": "role",
-        "服務年限": "yearsOfService",
+        "勤続年数": "yearsOfService",
         "住所": "address",
       }
 
@@ -664,7 +777,18 @@ const EMPLOYEE_HEADERS = [
       <TabsContent value="departments" className="space-y-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base sm:text-lg">部門管理</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg">部門管理</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchDepartments}
+                className="h-8 w-8 p-0"
+                title="リフレッシュ"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
           <div className="px-6 pb-4 space-y-3">
             <CardDescription className="text-xs sm:text-sm">組織の部門を追加・編集・削除</CardDescription>
@@ -784,7 +908,18 @@ const EMPLOYEE_HEADERS = [
       <TabsContent value="jobs" className="space-y-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base sm:text-lg">職位管理</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg">職位管理</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchJobs}
+                className="h-8 w-8 p-0"
+                title="リフレッシュ"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
           <div className="px-6 pb-4 space-y-3">
             <CardDescription className="text-xs sm:text-sm">職位・役職を追加・編集・削除</CardDescription>
@@ -872,7 +1007,18 @@ const EMPLOYEE_HEADERS = [
       <TabsContent value="employees" className="space-y-4">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base sm:text-lg">従業員管理</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg">従業員管理</CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={fetchEmployees}
+                className="h-8 w-8 p-0"
+                title="リフレッシュ"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
           </CardHeader>
           <div className="px-6 pb-4 space-y-3">
             <CardDescription className="text-xs sm:text-sm">
@@ -1036,18 +1182,68 @@ const EMPLOYEE_HEADERS = [
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>氏名</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 -ml-2"
+                      onClick={() => handleEmployeeSort('name')}
+                    >
+                      氏名
+                      {getSortIcon('name')}
+                    </Button>
+                  </TableHead>
                   <TableHead>メールアドレス</TableHead>
-                  <TableHead>部門</TableHead>
-                  <TableHead>職位</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 -ml-2"
+                      onClick={() => handleEmployeeSort('departmentName')}
+                    >
+                      部門
+                      {getSortIcon('departmentName')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 -ml-2"
+                      onClick={() => handleEmployeeSort('jobName')}
+                    >
+                      職位
+                      {getSortIcon('jobName')}
+                    </Button>
+                  </TableHead>
                   <TableHead>生年月日</TableHead>
-                  <TableHead>服務年限</TableHead>
-                  <TableHead>権限</TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 -ml-2"
+                      onClick={() => handleEmployeeSort('yearsOfService')}
+                    >
+                      勤続年数
+                      {getSortIcon('yearsOfService')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 -ml-2"
+                      onClick={() => handleEmployeeSort('role')}
+                    >
+                      権限
+                      {getSortIcon('role')}
+                    </Button>
+                  </TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {employees.map((emp) => (
+                {sortedEmployees.map((emp) => (
                   <TableRow key={emp.id}>
                     <TableCell className="font-medium">{emp.name}</TableCell>
                     <TableCell>{emp.email}</TableCell>

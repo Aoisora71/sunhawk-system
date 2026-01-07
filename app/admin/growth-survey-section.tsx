@@ -31,6 +31,7 @@ const excludedJobs = ["代表取締役", "部長", "パート", "業務委託者
 interface AnswerOption {
   text: string
   score: string
+  skip?: boolean // If true, skip the next question when this answer is selected
 }
 
 // Type for editing state - uses string scores for form inputs
@@ -137,6 +138,7 @@ export function GrowthSurveySection() {
           ? newQuestion.answers.map((a) => ({
               text: a.text.trim(),
               score: parseFloat(a.score),
+              skip: a.skip || false,
             }))
           : [],
       }
@@ -209,6 +211,7 @@ export function GrowthSurveySection() {
         ? question.answers.map((a: any) => ({
             text: a.text || "",
             score: a.score?.toString() || "",
+            skip: a.skip || false,
           }))
         : [],
       answerType: question.answerType || "scale",
@@ -269,6 +272,7 @@ export function GrowthSurveySection() {
           : editingQuestion.answers.map((a) => ({
               text: a.text.trim(),
               score: parseFloat(a.score),
+              skip: a.skip || false,
             })),
       }
       
@@ -324,7 +328,7 @@ export function GrowthSurveySection() {
     })
   }
 
-  const updateEditAnswer = (index: number, field: "text" | "score", value: string) => {
+  const updateEditAnswer = (index: number, field: "text" | "score" | "skip", value: string | boolean) => {
     if (!editingQuestion) return
     const updatedAnswers = [...editingQuestion.answers]
     updatedAnswers[index] = { ...updatedAnswers[index], [field]: value }
@@ -355,7 +359,7 @@ export function GrowthSurveySection() {
     })
   }
 
-  const updateAnswer = (index: number, field: "text" | "score", value: string) => {
+  const updateAnswer = (index: number, field: "text" | "score" | "skip", value: string | boolean) => {
     const updatedAnswers = [...newQuestion.answers]
     updatedAnswers[index] = { ...updatedAnswers[index], [field]: value }
     setNewQuestion({ ...newQuestion, answers: updatedAnswers })
@@ -895,7 +899,7 @@ export function GrowthSurveySection() {
                       <p className="text-xs sm:text-sm text-muted-foreground">回答を追加してください</p>
                     ) : (
                       <div className="space-y-3 border rounded-md p-3">
-                        {newQuestion.answers.map((answer, index) => (
+                        {newQuestion.answers.map((answer: AnswerOption, index) => (
                           <div key={index} className="flex gap-2 items-start">
                             <div className="flex-1 grid gap-2 grid-cols-1 sm:grid-cols-[1fr_120px]">
                               <div className="space-y-1">
@@ -906,6 +910,19 @@ export function GrowthSurveySection() {
                                   placeholder="回答テキスト"
                                   className="text-sm sm:text-base h-9 sm:h-10"
                                 />
+                                <div className="flex items-center space-x-2 mt-2">
+                                  <Checkbox
+                                    id={`new-skip-${index}`}
+                                    checked={answer.skip || false}
+                                    onCheckedChange={(checked) => updateAnswer(index, "skip", checked === true)}
+                                  />
+                                  <Label
+                                    htmlFor={`new-skip-${index}`}
+                                    className="text-xs font-normal cursor-pointer"
+                                  >
+                                    スキップマーク
+                                  </Label>
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs">スコア</Label>
@@ -1118,6 +1135,19 @@ export function GrowthSurveySection() {
                                   placeholder="回答テキスト"
                                   className="text-sm sm:text-base h-9 sm:h-10"
                                 />
+                                <div className="flex items-center space-x-2 mt-2">
+                                  <Checkbox
+                                    id={`skip-${index}`}
+                                    checked={answer.skip || false}
+                                    onCheckedChange={(checked) => updateEditAnswer(index, "skip", checked === true)}
+                                  />
+                                  <Label
+                                    htmlFor={`skip-${index}`}
+                                    className="text-xs font-normal cursor-pointer"
+                                  >
+                                    スキップマーク
+                                  </Label>
+                                </div>
                               </div>
                               <div className="space-y-1">
                                 <Label className="text-xs">スコア</Label>

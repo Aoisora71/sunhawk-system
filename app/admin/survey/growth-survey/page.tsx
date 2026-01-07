@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { DashboardNav } from "@/components/dashboard-nav"
 import { SurveyProgress } from "@/components/survey-progress"
 import { GrowthSurveyQuestionCard } from "@/components/growth-survey-question-card"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -383,7 +384,8 @@ export default function GrowthSurveyPage() {
       setTimeout(() => {
         window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })
       }, 100)
-      
+
+      // 状態の更新が完了してから次の問題に進む（スクロールは上に戻さない）
       if (nextIndex < questions.length) {
         setCurrentQuestionIndex(nextIndex)
       } else if (currentQuestionIndex < questions.length - 1) {
@@ -407,7 +409,9 @@ export default function GrowthSurveyPage() {
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader />
-      <main className="p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
+      <div className="flex">
+        <DashboardNav />
+        <main className="flex-1 p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
         <div className="max-w-3xl mx-auto space-y-5 sm:space-y-6 md:space-y-8">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-medium text-foreground mb-1">グロースサーベイ</h1>
@@ -445,24 +449,6 @@ export default function GrowthSurveyPage() {
                     </p>
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Button
-                    variant="default"
-                    className="w-full sm:w-auto"
-                    onClick={() => router.push("/employee-portal")}
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    従業員ポータルに戻る
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                    onClick={() => router.push("/")}
-                  >
-                    <Home className="mr-2 h-4 w-4" />
-                    ホームページに戻る
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           ) : (
@@ -487,9 +473,9 @@ export default function GrowthSurveyPage() {
                 variant="outline"
                 size="sm"
                 className="text-xs"
-                onClick={() => router.push("/employee-portal")}
+                onClick={() => router.push("/admin/survey")}
               >
-                従業員ポータルに戻る
+                アンケートページに戻る
               </Button>
             </CardContent>
           </Card>
@@ -568,12 +554,13 @@ export default function GrowthSurveyPage() {
                   </div>
                 </>
               )}
-                </>
-              )}
+            </>
+          )}
             </>
           )}
         </div>
-      </main>
+        </main>
+      </div>
     </div>
   )
 }

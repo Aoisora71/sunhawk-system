@@ -29,6 +29,8 @@ async function apiFetch<T>(
       },
       // Add credentials to ensure cookies are sent
       credentials: 'include',
+      // Disable cache by default, can be overridden in options
+      cache: options.cache || 'no-store',
     })
 
     // Handle network errors (e.g., CORS, connection refused, etc.)
@@ -239,25 +241,25 @@ export const usersApi = {
 // Surveys API (to be implemented)
 export const surveysApi = {
   list: async () => {
-    return apiFetch<{ success: boolean; surveys: any[]; error?: string }>('/surveys')
+    return await apiFetch<{ success: boolean; surveys: any[]; error?: string }>('/surveys')
   },
   get: async (surveyId: string) => {
-    return apiFetch<{ success: boolean; survey?: any; error?: string }>(`/surveys/${surveyId}`)
-  },
+    return await apiFetch<{ success: boolean; survey?: any; error?: string }>(`/surveys/${surveyId}`)
+  },  
   create: async (surveyData: any) => {
-    return apiFetch<{ success: boolean; survey?: any; error?: string }>('/surveys', {
+    return await apiFetch<{ success: boolean; survey?: any; error?: string }>('/surveys', {
       method: 'POST',
       body: JSON.stringify(surveyData),
     })
   },
   update: async (surveyId: string, surveyData: any) => {
-    return apiFetch<{ success: boolean; survey?: any; error?: string }>(`/surveys/${surveyId}`, {
+    return await apiFetch<{ success: boolean; survey?: any; error?: string }>(`/surveys/${surveyId}`, {
       method: 'PUT',
       body: JSON.stringify(surveyData),
     })
   },
   delete: async (surveyId: string) => {
-    return apiFetch<{ success: boolean; message?: string; error?: string }>(`/surveys/${surveyId}`, {
+    return await apiFetch<{ success: boolean; message?: string; error?: string }>(`/surveys/${surveyId}`, {
       method: 'DELETE',
     })
   },
@@ -730,6 +732,7 @@ export const organizationalSurveySummaryApi = {
         departmentCode: string | null
         jobId: number | null
         jobName: string | null
+        jobCode: string | null
         surveys: Array<{
           surveyId: number
           questions: Array<{
