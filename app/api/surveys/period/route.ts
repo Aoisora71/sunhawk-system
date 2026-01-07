@@ -46,28 +46,15 @@ export async function GET(request: NextRequest) {
       params.push(requestedType)
     }
 
-    // Check if running column exists
-    const columnCheck = await query<{ column_name: string }>(
-      `SELECT column_name 
-       FROM information_schema.columns 
-       WHERE table_name = 'surveys' 
-         AND column_name = 'running'`
-    )
-    const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
-
     // Compare dates properly: start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
     // This includes surveys where end_date is today (they are still active today)
     // Using ::date cast ensures we compare only the date part, ignoring time components
-    // Also check running field if it exists
-    const runningFilter = hasRunning ? ' AND (running IS NULL OR running = true)' : ''
-    
     const result = await query(
       `SELECT id, name, start_date, end_date, status, survey_type
        FROM surveys
        WHERE status = 'active'
          AND start_date::date <= CURRENT_DATE
          AND end_date::date >= CURRENT_DATE
-         ${runningFilter}
          ${filterClause}
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -83,14 +70,11 @@ export async function GET(request: NextRequest) {
       upcomingParams.push(requestedType)
     }
 
-    const nextRunningFilter = hasRunning ? ' AND (running IS NULL OR running = true)' : ''
-    
     const nextRes = await query(
       `SELECT start_date
        FROM surveys
        WHERE status = 'active'
          AND start_date::date > CURRENT_DATE
-         ${nextRunningFilter}
          ${upcomingFilterClause}
        ORDER BY start_date ASC
        LIMIT 1`,

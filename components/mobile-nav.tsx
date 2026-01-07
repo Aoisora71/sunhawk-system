@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Users, Settings, BarChart3, Menu, X, FileText, MessageSquare } from "lucide-react"
+import { LayoutDashboard, Users, Settings, BarChart3, Menu, X, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const adminNavItems = [
@@ -22,11 +22,6 @@ const adminNavItems = [
     title: "分析レポート",
     href: "/reports",
     icon: BarChart3,
-  },
-  {
-    title: "アンケート",
-    href: "/admin/survey",
-    icon: MessageSquare,
   },
   {
     title: "管理画面",

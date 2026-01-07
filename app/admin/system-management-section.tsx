@@ -588,6 +588,7 @@ export function SystemManagementSection() {
                     <TableRow>
                       <TableHead className="text-xs sm:text-sm whitespace-nowrap">ユーザー名</TableHead>
                       <TableHead className="text-xs sm:text-sm whitespace-nowrap">Email</TableHead>
+                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">IPアドレス</TableHead>
                       <TableHead className="text-xs sm:text-sm whitespace-nowrap">ログイン時間</TableHead>
                       <TableHead className="text-xs sm:text-sm whitespace-nowrap">ステータス</TableHead>
                     </TableRow>
@@ -599,6 +600,7 @@ export function SystemManagementSection() {
                           {log.userName || "-"}
                         </TableCell>
                         <TableCell className="text-xs sm:text-sm break-all">{log.email}</TableCell>
+                        <TableCell className="text-xs sm:text-sm whitespace-nowrap">{log.ipAddress}</TableCell>
                         <TableCell className="text-xs sm:text-sm whitespace-nowrap">{formatLoginTime(log.loginAt)}</TableCell>
                         <TableCell className="text-xs sm:text-sm">
                           {log.loginStatus === "success" ? (

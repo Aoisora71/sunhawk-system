@@ -7,7 +7,7 @@ import { toast as showToast } from '@/hooks/use-toast'
 export const toast = {
   success: (message: string, title?: string) => {
     showToast({
-      variant: 'success',
+      variant: 'default',
       title: title || '成功',
       description: message,
     })
@@ -31,7 +31,7 @@ export const toast = {
   
   warning: (message: string, title?: string) => {
     showToast({
-      variant: 'warning',
+      variant: 'default',
       title: title || '警告',
       description: message,
     })

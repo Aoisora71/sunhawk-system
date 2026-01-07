@@ -51,20 +51,13 @@ async function handlePut(
       if (typeof answerValue !== "string" || answerValue.length === 0) {
         return badRequestResponse("回答を選択してください")
       }
-      
-      // Handle skipped questions (special value "skipped" indicates the question was skipped)
-      if (answerValue === "skipped") {
-        finalAnswerText = "スキップ"
-        finalScore = null // Skipped questions have null score and are not included in score calculations
-      } else {
-        const options = getGrowthSurveyOptions(question)
-        const matchedOption = options.find((option) => option.value === answerValue)
-        if (!matchedOption) {
-          return badRequestResponse("無効な選択肢です")
-        }
-        finalAnswerText = matchedOption.label
-        finalScore = matchedOption.score ?? null
+      const options = getGrowthSurveyOptions(question)
+      const matchedOption = options.find((option) => option.value === answerValue)
+      if (!matchedOption) {
+        return badRequestResponse("無効な選択肢です")
       }
+      finalAnswerText = matchedOption.label
+      finalScore = matchedOption.score ?? null
     }
 
     const activeSurvey = await getActiveGrowthSurvey()
