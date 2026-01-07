@@ -164,6 +164,7 @@ export const createGrowthSurveyQuestionSchema = z.object({
   answers: z.array(z.object({
     text: z.string(),
     score: z.union([z.string(), z.number(), z.null()]).transform((val) => val === null || val === '' ? null : typeof val === 'string' ? parseFloat(val) : val).pipe(z.number().nullable()).optional(),
+    skip: z.boolean().optional().default(false), // If true, skip the next question when this answer is selected
   })).optional(),
   focusArea: z.string().optional().nullable(),
   answerType: z.string().optional(),
@@ -187,6 +188,7 @@ export const updateGrowthSurveyQuestionSchema = z.object({
   answers: z.array(z.object({
     text: z.string(),
     score: z.union([z.string(), z.number(), z.null()]).transform((val) => val === null || val === '' ? null : typeof val === 'string' ? parseFloat(val) : val).pipe(z.number().nullable()).optional(),
+    skip: z.boolean().optional().default(false), // If true, skip the next question when this answer is selected
   })).optional(),
   focusArea: z.string().optional().nullable(),
   answerType: z.string().optional(),

@@ -29,15 +29,30 @@ function parseJsonArray<T = any>(value: any): T[] {
 
 function mapAnswers(value: any): GrowthSurveyQuestion["answers"] {
   const array = parseJsonArray(value)
-  return array.map((item: any) => ({
-    text: typeof item?.text === "string" ? item.text : "",
-    score:
-      typeof item?.score === "number"
-        ? item.score
-        : item?.score === null || item?.score === undefined
-          ? null
-          : Number(item.score),
-  }))
+  return array.map((item: any) => {
+    // Handle skip field - can be boolean true, string "true", or number 1
+    let skipValue = false
+    if (item?.skip !== undefined && item?.skip !== null) {
+      if (typeof item.skip === "boolean") {
+        skipValue = item.skip
+      } else if (typeof item.skip === "string") {
+        skipValue = item.skip.toLowerCase() === "true" || item.skip === "1"
+      } else if (typeof item.skip === "number") {
+        skipValue = item.skip === 1
+      }
+    }
+    
+    return {
+      text: typeof item?.text === "string" ? item.text : "",
+      score:
+        typeof item?.score === "number"
+          ? item.score
+          : item?.score === null || item?.score === undefined
+            ? null
+            : Number(item.score),
+      skip: skipValue,
+    }
+  })
 }
 
 function mapTargetJobs(value: any): string[] {
