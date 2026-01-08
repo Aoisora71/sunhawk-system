@@ -110,30 +110,11 @@ export async function getUserJobName(userId: number): Promise<string | null> {
   return result.rows[0]?.job_name ?? null
 }
 
-export async function getUserRole(userId: number): Promise<string | null> {
-  const result = await query<{ role: string | null }>(
-    `SELECT role FROM users WHERE id = $1`,
-    [userId],
-  )
-  return result.rows[0]?.role ?? null
-}
-
 export async function getAccessibleGrowthSurveyQuestions(
   userId: number,
   options: { activeOnly?: boolean } = {},
 ): Promise<GrowthSurveyQuestion[]> {
   const questions = await fetchGrowthSurveyQuestions()
-  const userRole = await getUserRole(userId)
-  
-  // Admin users can access all questions regardless of targetJobs
-  if (userRole === 'admin') {
-    const { activeOnly = false } = options
-    if (activeOnly) {
-      return questions.filter((question) => question.isActive)
-    }
-    return questions
-  }
-  
   const jobName = await getUserJobName(userId)
   return filterGrowthSurveyQuestionsByJob(questions, jobName, options)
 }

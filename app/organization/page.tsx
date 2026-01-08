@@ -405,7 +405,6 @@ export default function OrganizationPage() {
     }
 
     const membersByDept = new Map<string, MemberEntry[]>()
-    // Include all employees including admins in organization chart
     employees.forEach((emp: any) => {
       const deptKey = String(emp.departmentId ?? "")
       const priority = getJobOrderMeta(emp.jobId).numeric
@@ -473,7 +472,6 @@ export default function OrganizationPage() {
       const employeeChildren = memberEntries
         .filter((entry) => !managerId || entry.id !== managerId)
         .sort((a, b) => {
-          // First sort by job code (priority - numeric value of job code), then by name
           if (a.priority !== b.priority) return a.priority - b.priority
           return (a.employee.name || "").localeCompare(b.employee.name || "")
         })
@@ -541,7 +539,6 @@ export default function OrganizationPage() {
       }
     >()
 
-    // Include all employees including admins in position view
     for (const e of employees) {
       const key = e.jobName || "未設定"
       const { numeric, codeText, rawCode } = getJobOrderMeta(e.jobId)
@@ -585,22 +582,9 @@ export default function OrganizationPage() {
       .map(([pos, data]) => ({
         position: pos,
         code: data.codeLabel,
-        members: data.members.sort((a, b) => {
-          // Sort by department code first, then by name
-          const deptA = a.department || ""
-          const deptB = b.department || ""
-          // Get department code from departments array
-          const deptAObj = departments.find((d: any) => d.name === deptA)
-          const deptBObj = departments.find((d: any) => d.name === deptB)
-          const codeA = deptAObj?.code || deptA
-          const codeB = deptBObj?.code || deptB
-          if (codeA !== codeB) {
-            return codeA.localeCompare(codeB, 'ja')
-          }
-          return (a.name || "").localeCompare(b.name || "")
-        }),
+        members: data.members.sort((a, b) => (a.name || "").localeCompare(b.name || "")),
       }))
-  }, [employees, jobOrderMap, employeeScores, departments])
+  }, [employees, jobOrderMap, employeeScores])
 
   const totalEmployees = employees.length
 
@@ -636,6 +620,22 @@ export default function OrganizationPage() {
     return count
   }, [departments])
 
+  const ceo: OrgEmployee = useMemo(() => {
+    // Pick an admin user as CEO fallback; otherwise a placeholder
+    const admin = employees.find((e) => e.role === "admin")
+    // Ensure admin.id is treated as number for lookup
+    const adminIdNum = admin ? (typeof admin.id === 'string' ? Number(admin.id) : admin.id) : null
+    const scores = adminIdNum ? (employeeScores.get(adminIdNum) || { currentScore: null, pastScores: [] }) : { currentScore: null, pastScores: [] }
+    return {
+      id: admin?.id ? String(admin.id) : "ceo",
+      name: admin?.name || "管理者",
+      position: admin?.jobName || "管理者",
+      department: admin?.departmentName || "経営",
+      type: "executive",
+      score: 0,
+      scores: scores,
+    }
+  }, [employees, employeeScores])
 
   // Show loading state while checking authorization
   if (isAuthorized === null) {

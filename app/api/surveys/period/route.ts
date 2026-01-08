@@ -143,7 +143,6 @@ export async function GET(request: NextRequest) {
        FROM surveys
        WHERE status = 'active'
          AND start_date::date > CURRENT_DATE
-         ${nextRunningFilter}
          ${upcomingFilterClause}
        ORDER BY start_date ASC
        LIMIT 1`,

@@ -14,8 +14,6 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
   try {
     const { searchParams } = new URL(request.url)
     const surveyId = searchParams.get("surveyId")
-    const allUsers = searchParams.get("allUsers") === "true" // For admin to view all users' results
-    const requestedUserId = searchParams.get("userId") // For admin to view specific user's results
 
     let queryText = `
       SELECT 
@@ -33,26 +31,8 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     const params: any[] = []
     let paramIndex = 1
 
-    // Filter by user ID:
-    // - Regular users: always their own
-    // - Admins: their own by default, unless allUsers=true or userId is specified
-    if (user.role === "admin") {
-      if (requestedUserId) {
-        // Admin requesting specific user's responses
-        const userIdNum = parseInt(requestedUserId, 10)
-        if (isNaN(userIdNum)) {
-          return badRequestResponse("無効なuserIdです")
-        }
-        queryText += ` AND uid = $${paramIndex++}`
-        params.push(userIdNum)
-      } else if (!allUsers) {
-        // Admin participating in survey - show only their own responses
-        queryText += ` AND uid = $${paramIndex++}`
-        params.push(user.userId)
-      }
-      // If allUsers=true, don't filter by userId (show all)
-    } else {
-      // Regular users can only see their own
+    // Admin can see all, regular users only their own
+    if (user.role !== "admin") {
       queryText += ` AND uid = $${paramIndex++}`
       params.push(user.userId)
     }

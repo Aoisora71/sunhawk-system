@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { flushSync } from "react-dom"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,10 +16,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Calendar, CheckCircle2, XCircle, Clock, RefreshCw, Play, Pause, Eye, EyeOff, Edit, Trash2 } from "lucide-react"
+import { Plus, Calendar, CheckCircle2, XCircle, Clock, RefreshCw } from "lucide-react"
 import api from "@/lib/api-client"
 import { toast } from "@/lib/toast"
 import type { Survey } from "@/lib/types"
+
 const SURVEY_TYPE_OPTIONS = [
   { value: "organizational", label: "ソシキサーベイ" },
   { value: "growth", label: "グロースサーベイ" },
@@ -46,23 +46,26 @@ export function SurveyPeriodSection() {
   const [runningSurveyError, setRunningSurveyError] = useState<{ open: boolean; currentSurvey: Survey | null; newSurvey: Survey | null }>({ open: false, currentSurvey: null, newSurvey: null })
   const [displayLimitError, setDisplayLimitError] = useState<{ open: boolean; surveyType: string | null; currentCount: number }>({ open: false, surveyType: null, currentCount: 0 })
 
-  const fetchSurveys = useCallback(async () => {
+  useEffect(() => {
+    fetchSurveys()
+  }, [])
+
+  const fetchSurveys = async () => {
     try {
+      setIsLoading(true)
       const response = await api.surveys.list()
       if (response?.success && response.surveys) {
         setSurveys(response.surveys)
+      } else {
+        setSurveys([])
       }
     } catch (error: any) {
-      console.error("Error fetching surveys:", error)
-      toast.error("サーベイ一覧の取得に失敗しました")
+            toast.error("サーベイ一覧の取得に失敗しました")
+      setSurveys([])
     } finally {
       setIsLoading(false)
     }
-  }, [])
-
-  useEffect(() => {
-    fetchSurveys()
-  }, [fetchSurveys])
+  }
 
   const handleCreateSurvey = async () => {
     if (!newSurvey.name || !newSurvey.startDate || !newSurvey.endDate || !newSurvey.surveyType) {
@@ -87,12 +90,12 @@ export function SurveyPeriodSection() {
         toast.success("サーベイ期間を設定しました")
         setIsAddSurveyOpen(false)
         setNewSurvey({ name: "", startDate: "", endDate: "", surveyType: "organizational" })
-        await fetchSurveys();
+        fetchSurveys()
       } else {
         toast.error(response?.error || "サーベイ期間の設定に失敗しました")
       }
     } catch (error: any) {
-      toast.error("サーベイ期間の設定に失敗しました")
+            toast.error("サーベイ期間の設定に失敗しました")
     }
   }
 
@@ -125,12 +128,12 @@ export function SurveyPeriodSection() {
       if (response?.success) {
         toast.success("サーベイ期間を更新しました")
         setEditingSurvey(null)
-        await fetchSurveys();
+        fetchSurveys()
       } else {
         toast.error(response?.error || "サーベイ期間の更新に失敗しました")
       }
     } catch (error: any) {
-      toast.error("サーベイ期間の更新に失敗しました")
+            toast.error("サーベイ期間の更新に失敗しました")
     }
   }
 
@@ -302,26 +305,7 @@ export function SurveyPeriodSection() {
   }
 
   const handleRefresh = async () => {
-    try {
-      setIsLoading(true)
-      const response = await api.surveys.list()
-      if (response?.success && response.surveys) {
-        flushSync(() => {
-          setSurveys(response.surveys)
-        })
-      } else {
-        flushSync(() => {
-          setSurveys([])
-        })
-      }
-    } catch (error: any) {
-      toast.error("サーベイ一覧の取得に失敗しました")
-      flushSync(() => {
-        setSurveys([])
-      })
-    } finally {
-      setIsLoading(false)
-    }
+    await fetchSurveys()
   }
 
   return (
@@ -442,15 +426,13 @@ export function SurveyPeriodSection() {
                 <TableHead className="text-xs sm:text-sm whitespace-nowrap">開始日</TableHead>
                 <TableHead className="text-xs sm:text-sm whitespace-nowrap">終了日</TableHead>
                 <TableHead className="text-xs sm:text-sm whitespace-nowrap">ステータス</TableHead>
-                <TableHead className="text-center text-xs sm:text-sm whitespace-nowrap">実行/停止</TableHead>
-                <TableHead className="text-center text-xs sm:text-sm whitespace-nowrap">表示/非表示</TableHead>
                 <TableHead className="text-right text-xs sm:text-sm whitespace-nowrap">操作</TableHead>
               </TableRow>
             </TableHeader>
           <TableBody>
             {surveys.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
                   サーベイ期間が設定されていません
                 </TableCell>
               </TableRow>
@@ -531,19 +513,17 @@ export function SurveyPeriodSection() {
                             surveyType: survey.surveyType || "organizational",
                           })
                         }
-                        className="h-8 w-8 p-0"
-                        title="編集"
+                        className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                       >
-                        <Edit className="h-4 w-4" />
+                        編集
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteSurvey(String(survey.id))}
-                        className="h-8 w-8 p-0"
-                        title="削除"
+                        className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        削除
                       </Button>
                     </div>
                   </TableCell>

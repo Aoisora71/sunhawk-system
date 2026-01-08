@@ -14,21 +14,8 @@ function normalizeSurveyType(value?: string | null): typeof SURVEY_TYPES[number]
 // GET /api/surveys - List all surveys
 async function handleGet(request: NextRequest, user: AdminUser) {
   try {
-    // Check if running and display columns exist
-    const columnCheck = await query<{ column_name: string }>(
-      `SELECT column_name 
-       FROM information_schema.columns 
-       WHERE table_name = 'surveys' 
-         AND column_name IN ('running', 'display')`
-    )
-    const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
-    const hasDisplay = columnCheck.rows.some(r => r.column_name === 'display')
-
-    const runningSelect = hasRunning ? ', running' : ', true as running'
-    const displaySelect = hasDisplay ? ', display' : ', true as display'
-
     const result = await query(
-      `SELECT id, name, start_date, end_date, status, survey_type, created_at, updated_at${runningSelect}${displaySelect}
+      `SELECT id, name, start_date, end_date, status, survey_type, created_at, updated_at
        FROM surveys
        ORDER BY created_at DESC`
     )
@@ -40,8 +27,6 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       endDate: row.end_date,
       status: row.status as 'active' | 'completed' | 'draft',
       surveyType: normalizeSurveyType(row.survey_type) as 'organizational' | 'growth',
-      running: row.running !== undefined ? Boolean(row.running) : true,
-      display: row.display !== undefined ? Boolean(row.display) : true,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }))
@@ -92,9 +77,9 @@ async function handlePost(request: NextRequest, user: AdminUser) {
       survey_type: string
       created_at: string
     }>(
-      `INSERT INTO surveys (name, start_date, end_date, status, survey_type, created_by${runningColumn}${displayColumn})
-       VALUES ($1, $2, $3, $4, $5, $6${runningValue}${displayValue})
-       RETURNING id, name, start_date, end_date, status, survey_type, created_at${runningSelect}${displaySelect}`,
+      `INSERT INTO surveys (name, start_date, end_date, status, survey_type, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, name, start_date, end_date, status, survey_type, created_at`,
       [name.trim(), startDate, endDate, "active", normalizedType, user.userId]
     )
 

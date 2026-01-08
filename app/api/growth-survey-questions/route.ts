@@ -115,7 +115,7 @@ async function handlePost(request: NextRequest, user: { userId: number }) {
     const row = result.rows[0]
     
     let parsedTargetJobs: string[] = []
-    let parsedAnswers: { text: string; score: number | null; skip?: boolean }[] = []
+    let parsedAnswers: { text: string; score: number | null }[] = []
     
     if (row.target_jobs) {
       try {
