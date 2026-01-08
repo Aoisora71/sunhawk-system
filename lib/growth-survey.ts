@@ -164,12 +164,10 @@ export async function getActiveGrowthSurvey() {
   )
   const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
   
-  // First, try to find a survey with running = true (regardless of date)
-  // If not found, then check for surveys within date range
-  let result: any = { rows: [] }
-  
+  // Only allow participation in surveys with running = true
+  // Do not check date range - only running = true surveys are available for participation
   if (hasRunning) {
-    // First query: Look for running = true surveys (no date check)
+    // Only look for running = true surveys (no date check, no fallback to date range)
     const runningResult = await query<{
       id: number
       name: string
@@ -192,34 +190,14 @@ export async function getActiveGrowthSurvey() {
     }
   }
   
-  // If no running = true survey found, check date range
-  const dateResult = await query<{
-    id: number
-    name: string
-    start_date: string
-    end_date: string
-    status: string
-    survey_type: string | null
-  }>(
-    `SELECT id, name, start_date, end_date, status, survey_type
-     FROM surveys
-     WHERE status = 'active'
-       AND survey_type = 'growth'
-       AND start_date::date <= CURRENT_DATE
-       AND end_date::date >= CURRENT_DATE
-     ORDER BY created_at DESC
-     LIMIT 1`,
-  )
-
-  if (dateResult.rows.length === 0) return null
-  return dateResult.rows[0]
+  // If no running = true survey found, return null (do not check date range)
+  return null
 }
 
 /**
  * Get active organizational survey
- * Uses the same two-step query approach as getActiveGrowthSurvey and /api/surveys/period
- * First, try to find a survey with running = true (regardless of date)
- * If not found, then check for surveys within date range
+ * Only allows participation in surveys with running = true
+ * Do not check date range - only running = true surveys are available for participation
  */
 export async function getActiveOrganizationalSurvey() {
   // Check if running column exists
@@ -231,10 +209,10 @@ export async function getActiveOrganizationalSurvey() {
   )
   const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
   
-  // First, try to find a survey with running = true (regardless of date)
-  // If not found, then check for surveys within date range
+  // Only allow participation in surveys with running = true
+  // Do not check date range - only running = true surveys are available for participation
   if (hasRunning) {
-    // First query: Look for running = true surveys (no date check)
+    // Only look for running = true surveys (no date check, no fallback to date range)
     const runningResult = await query<{
       id: number
       name: string
@@ -257,26 +235,7 @@ export async function getActiveOrganizationalSurvey() {
     }
   }
   
-  // If no running = true survey found, check date range
-  const dateResult = await query<{
-    id: number
-    name: string
-    start_date: string
-    end_date: string
-    status: string
-    survey_type: string | null
-  }>(
-    `SELECT id, name, start_date, end_date, status, survey_type
-     FROM surveys
-     WHERE status = 'active'
-       AND survey_type = 'organizational'
-       AND start_date::date <= CURRENT_DATE
-       AND end_date::date >= CURRENT_DATE
-     ORDER BY created_at DESC
-     LIMIT 1`,
-  )
-
-  if (dateResult.rows.length === 0) return null
-  return dateResult.rows[0]
+  // If no running = true survey found, return null (do not check date range)
+  return null
 }
 

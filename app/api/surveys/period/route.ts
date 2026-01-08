@@ -62,12 +62,12 @@ export async function GET(request: NextRequest) {
       params.push(requestedType)
     }
 
-    // First, try to find a survey with running = true (regardless of date)
-    // If not found, then check for surveys within date range
+    // Only allow participation in surveys with running = true
+    // Do not check date range - only running = true surveys are available for participation
     let result: any = { rows: [] }
     
     if (hasRunning) {
-      // First query: Look for running = true surveys (no date check)
+      // Only look for running = true surveys (no date check, no fallback to date range)
       const runningQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
         FROM surveys
         WHERE status = 'active'
@@ -84,28 +84,6 @@ export async function GET(request: NextRequest) {
       console.log('[Survey Period API] Running = true result rows:', result.rows.length)
       if (result.rows.length > 0) {
         console.log('[Survey Period API] Found running = true survey:', JSON.stringify(result.rows[0], null, 2))
-      }
-    }
-    
-    // If no running = true survey found, check date range
-    if (result.rows.length === 0) {
-      const dateFilter = ' AND start_date::date <= CURRENT_DATE AND end_date::date >= CURRENT_DATE'
-      const dateQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
-       FROM surveys
-       WHERE status = 'active'
-          ${dateFilter}
-         ${filterClause}
-       ORDER BY created_at DESC
-        LIMIT 1`
-      
-      console.log('[Survey Period API] Date query:', dateQuery)
-      console.log('[Survey Period API] Params:', params)
-      
-      result = await query(dateQuery, params)
-      
-      console.log('[Survey Period API] Date range result rows:', result.rows.length)
-      if (result.rows.length > 0) {
-        console.log('[Survey Period API] Found date range survey:', JSON.stringify(result.rows[0], null, 2))
       } else {
         // Debug: Check what surveys exist
         const debugQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
@@ -116,15 +94,17 @@ export async function GET(request: NextRequest) {
         console.log('[Survey Period API] All active surveys:', JSON.stringify(debugResult.rows, null, 2))
         
         // Also check specifically for running = true surveys
-        if (hasRunning) {
-          const runningCheckQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
-            FROM surveys
-            WHERE status = 'active' AND running = true${filterClause}
-            ORDER BY created_at DESC`
-          const runningCheckResult = await query(runningCheckQuery, params)
-          console.log('[Survey Period API] Running = true surveys (debug):', JSON.stringify(runningCheckResult.rows, null, 2))
-        }
+        const runningCheckQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
+          FROM surveys
+          WHERE status = 'active' AND running = true${filterClause}
+          ORDER BY created_at DESC`
+        const runningCheckResult = await query(runningCheckQuery, params)
+        console.log('[Survey Period API] Running = true surveys (debug):', JSON.stringify(runningCheckResult.rows, null, 2))
       }
+    } else {
+      // If running column doesn't exist, return no available survey
+      // This ensures backward compatibility while enforcing the new requirement
+      console.log('[Survey Period API] Running column does not exist - returning no available survey')
     }
 
     // Also find the next upcoming active survey
