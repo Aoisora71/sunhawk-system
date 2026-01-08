@@ -103,7 +103,7 @@ export default function DashboardPage() {
   const [availableSurveys, setAvailableSurveys] = useState<Array<{ id: number; name: string; startDate: string | null; endDate: string | null }>>([])
   const [departmentsForAnalysis, setDepartmentsForAnalysis] = useState<Department[]>([])
   const [availableJobs, setAvailableJobs] = useState<Array<{ id: number; name: string; code: string | null }>>([])
-  const [selectedSurveyIds, setSelectedSurveyIds] = useState<number[]>([])
+  const [selectedSurveyId, setSelectedSurveyId] = useState<number | null>(null)
   const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<number[]>([])
   const [selectedJobIds, setSelectedJobIds] = useState<number[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
@@ -557,6 +557,8 @@ export default function DashboardPage() {
   }>>([])
   const [departmentCategorySurveyName, setDepartmentCategorySurveyName] = useState<string | null>(null)
   const [departmentCategoryPreviousSurveyName, setDepartmentCategoryPreviousSurveyName] = useState<string | null>(null)
+  const [selectedDepartmentCategorySurvey1, setSelectedDepartmentCategorySurvey1] = useState<number | null>(null)
+  const [selectedDepartmentCategorySurvey2, setSelectedDepartmentCategorySurvey2] = useState<number | null>(null)
   
   const filteredDepartmentCategoryData = useMemo(() => {
     if (!departmentCategorySearchQuery.trim()) return departmentCategoryData.filter((dept: typeof departmentCategoryData[0]) => dept.departmentName != null && dept.departmentName.trim() !== '')
@@ -1042,6 +1044,7 @@ export default function DashboardPage() {
     totalRespondents: number
   }>>([])
   const [selectedGrowthSurveyId, setSelectedGrowthSurveyId] = useState<string | null>(null)
+  const [availableGrowthSurveys, setAvailableGrowthSurveys] = useState<Array<{ id: number; name: string; startDate: string | null; endDate: string | null }>>([])
   const [employees, setEmployees] = useState<User[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [departmentChartData, setDepartmentChartData] = useState<
@@ -1395,10 +1398,10 @@ export default function DashboardPage() {
       }
     }
 
-    if (showDetailedAnalysisModal) {
+    if (showDetailedAnalysisModal || showDepartmentCategoryDialog) {
       loadAvailableSurveys()
     }
-  }, [showDetailedAnalysisModal])
+  }, [showDetailedAnalysisModal, showDepartmentCategoryDialog])
 
   // Load departments and jobs for detailed analysis modal
   useEffect(() => {
@@ -2457,22 +2460,33 @@ export default function DashboardPage() {
                         size="sm"
                         onClick={async () => {
                           setShowDepartmentCategoryDialog(true)
+                          // デフォルトで現在サーベイと以前サーベイを選択
+                          const defaultSurvey1 = radarCurrentSurveyId ? parseInt(radarCurrentSurveyId, 10) : null
+                          const defaultSurvey2 = radarPreviousSurveyId ? parseInt(radarPreviousSurveyId, 10) : null
+                          setSelectedDepartmentCategorySurvey1(defaultSurvey1)
+                          setSelectedDepartmentCategorySurvey2(defaultSurvey2)
+                          
                           setDepartmentCategoryLoading(true)
                           try {
-                            // 現在のサーベイデータを取得
-                            const currentResponse = await api.organizationalSurveySummary.getDepartmentCategory(radarCurrentSurveyId)
-                            if (currentResponse?.success && currentResponse.departmentCategoryScores) {
-                              setDepartmentCategoryData(currentResponse.departmentCategoryScores)
-                              setDepartmentCategorySurveyName(currentResponse.surveyName || null)
+                            // サーベイ1のデータを取得
+                            if (defaultSurvey1) {
+                              const currentResponse = await api.organizationalSurveySummary.getDepartmentCategory(defaultSurvey1.toString())
+                              if (currentResponse?.success && currentResponse.departmentCategoryScores) {
+                                setDepartmentCategoryData(currentResponse.departmentCategoryScores)
+                                setDepartmentCategorySurveyName(currentResponse.surveyName || null)
+                              } else {
+                                setDepartmentCategoryData([])
+                                setDepartmentCategorySurveyName(null)
+                              }
                             } else {
                               setDepartmentCategoryData([])
                               setDepartmentCategorySurveyName(null)
                             }
 
-                            // 以前のサーベイデータを取得（存在する場合）
-                            if (radarPreviousSurveyId) {
+                            // サーベイ2のデータを取得（存在する場合）
+                            if (defaultSurvey2) {
                               try {
-                                const previousResponse = await api.organizationalSurveySummary.getDepartmentCategory(radarPreviousSurveyId)
+                                const previousResponse = await api.organizationalSurveySummary.getDepartmentCategory(defaultSurvey2.toString())
                                 if (previousResponse?.success && previousResponse.departmentCategoryScores) {
                                   setDepartmentCategoryPreviousData(previousResponse.departmentCategoryScores)
                                   setDepartmentCategoryPreviousSurveyName(previousResponse.surveyName || null)
@@ -2560,40 +2574,47 @@ export default function DashboardPage() {
                     variant="outline"
                     size="sm"
                     onClick={async () => {
-                      // Get current survey ID from the loaded data
+                      // Load available growth surveys
                       const surveysRes = await api.surveys.list()
                       if (surveysRes?.success && Array.isArray(surveysRes.surveys)) {
-                        const growthSurveys = surveysRes.surveys.filter((s: any) => s.surveyType === 'growth')
-                        if (growthSurveys.length > 0) {
-                          // Get the current (most recent) survey
-                          const currentSurvey = growthSurveys.sort((a: any, b: any) => {
+                        const growthSurveys = surveysRes.surveys
+                          .filter((s: any) => s.surveyType === 'growth')
+                          .map((s: any) => ({
+                            id: Number(s.id),
+                            name: s.name || `サーベイ ${s.id}`,
+                            startDate: s.startDate || null,
+                            endDate: s.endDate || null,
+                          }))
+                          .sort((a, b) => {
                             const aEnd = a.endDate ? new Date(a.endDate).getTime() : 0
                             const bEnd = b.endDate ? new Date(b.endDate).getTime() : 0
-                            if (aEnd !== bEnd) return bEnd - aEnd
-                            const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0
-                            const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0
-                            if (aCreated !== bCreated) return bCreated - aCreated
-                            return Number(b.id) - Number(a.id)
-                          })[0]
-                          
-                          if (currentSurvey) {
-                            setSelectedGrowthSurveyId(String(currentSurvey.id))
-                            setShowGrowthQuestionResponsesDialog(true)
-                            setGrowthQuestionResponsesLoading(true)
-                            try {
-                              const response = await api.growthSurveyResponses.getQuestionResponses(String(currentSurvey.id))
-                              if (response?.success && response.questions) {
-                                setGrowthQuestionResponsesData(response.questions)
-                              } else {
-                                setGrowthQuestionResponsesData([])
-                              }
-                            } catch (error) {
-                              console.error("Failed to load growth question responses:", error)
+                            return bEnd - aEnd
+                          })
+                        setAvailableGrowthSurveys(growthSurveys)
+                        
+                        // Set default to most recent survey
+                        if (growthSurveys.length > 0) {
+                          const defaultSurveyId = growthSurveys[0].id.toString()
+                          setSelectedGrowthSurveyId(defaultSurveyId)
+                          setShowGrowthQuestionResponsesDialog(true)
+                          setGrowthQuestionResponsesLoading(true)
+                          try {
+                            const response = await api.growthSurveyResponses.getQuestionResponses(defaultSurveyId)
+                            if (response?.success && response.questions) {
+                              setGrowthQuestionResponsesData(response.questions)
+                            } else {
                               setGrowthQuestionResponsesData([])
-                            } finally {
-                              setGrowthQuestionResponsesLoading(false)
                             }
+                          } catch (error) {
+                            console.error("Failed to load growth question responses:", error)
+                            setGrowthQuestionResponsesData([])
+                          } finally {
+                            setGrowthQuestionResponsesLoading(false)
                           }
+                        } else {
+                          setShowGrowthQuestionResponsesDialog(true)
+                          setSelectedGrowthSurveyId(null)
+                          setGrowthQuestionResponsesData([])
                         }
                       }
                     }}
@@ -2660,7 +2681,17 @@ export default function DashboardPage() {
             </Card>
 
             {/* Growth Survey Question Responses Dialog */}
-            <Dialog open={showGrowthQuestionResponsesDialog} onOpenChange={setShowGrowthQuestionResponsesDialog}>
+            <Dialog 
+              open={showGrowthQuestionResponsesDialog} 
+              onOpenChange={(open) => {
+                setShowGrowthQuestionResponsesDialog(open)
+                if (!open) {
+                  // Reset when closing
+                  setSelectedGrowthSurveyId(null)
+                  setGrowthQuestionResponsesData([])
+                }
+              }}
+            >
               <DialogContent className="w-[calc(100vw-0.5rem)] sm:w-[95vw] md:w-[90vw] lg:w-[85vw] xl:w-[80vw] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-4 md:p-6">
                 <DialogHeader className="pb-2 flex-shrink-0">
                   <DialogTitle className="text-base sm:text-lg md:text-xl">グロースサーベイ回答状況</DialogTitle>
@@ -2668,6 +2699,49 @@ export default function DashboardPage() {
                     各問題に対する回答状況を確認できます
                   </DialogDescription>
                 </DialogHeader>
+                <div className="flex-shrink-0 mb-3">
+                  <div className="space-y-2">
+                    <Label className="text-sm">成長サーベイ</Label>
+                    <Select
+                      value={selectedGrowthSurveyId || ""}
+                      onValueChange={async (value) => {
+                        setSelectedGrowthSurveyId(value)
+                        setGrowthQuestionResponsesLoading(true)
+                        try {
+                          const response = await api.growthSurveyResponses.getQuestionResponses(value)
+                          if (response?.success && response.questions) {
+                            setGrowthQuestionResponsesData(response.questions)
+                          } else {
+                            setGrowthQuestionResponsesData([])
+                          }
+                        } catch (error) {
+                          console.error("Failed to load growth question responses:", error)
+                          setGrowthQuestionResponsesData([])
+                        } finally {
+                          setGrowthQuestionResponsesLoading(false)
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full text-sm h-9 sm:h-10">
+                        <SelectValue placeholder="成長サーベイを選択" />
+                      </SelectTrigger>
+                      <SelectContent className="!z-[110]">
+                        {availableGrowthSurveys.map((survey) => (
+                          <SelectItem key={survey.id} value={survey.id.toString()}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{survey.name}</span>
+                              {survey.endDate && (
+                                <span className="text-xs text-muted-foreground">
+                                  {new Date(survey.endDate).toLocaleDateString("ja-JP")}
+                                </span>
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="flex-1 overflow-y-auto min-h-0">
                 {growthQuestionResponsesLoading ? (
                     <div className="text-center py-8 text-muted-foreground text-sm sm:text-base">読み込み中です…</div>
@@ -3058,27 +3132,144 @@ export default function DashboardPage() {
       </Dialog>
 
       {/* 部署別・カテゴリ別スコア詳細ダイアログ */}
-      <Dialog open={showDepartmentCategoryDialog} onOpenChange={setShowDepartmentCategoryDialog}>
+      <Dialog 
+        open={showDepartmentCategoryDialog} 
+        onOpenChange={(open) => {
+          setShowDepartmentCategoryDialog(open)
+          if (!open) {
+            // モーダルを閉じたときに選択をリセット
+            setSelectedDepartmentCategorySurvey1(null)
+            setSelectedDepartmentCategorySurvey2(null)
+            setDepartmentCategoryData([])
+            setDepartmentCategoryPreviousData([])
+            setDepartmentCategorySurveyName(null)
+            setDepartmentCategoryPreviousSurveyName(null)
+            setDepartmentCategorySearchQuery("")
+          }
+        }}
+      >
         <DialogContent className="w-[calc(100vw-0.5rem)] sm:w-[99vw] md:w-[98vw] lg:w-[97vw] xl:w-[96vw] 2xl:w-[95vw] max-w-[95vw] md:max-w-[98vw] lg:max-w-[97vw] xl:max-w-[96vw] 2xl:max-w-[95vw] h-[88vh] md:h-[90vh] max-h-[95vh] overflow-hidden flex flex-col p-3 md:p-4">
           <DialogHeader className="pb-2 flex-shrink-0">
             <DialogTitle className="text-base md:text-lg">部署別・カテゴリ別スコア</DialogTitle>
-            <div className="mt-1 space-y-1">
-              {departmentCategorySurveyName && (
-                <div className="text-xs md:text-sm font-medium text-foreground">
-                  現在サーベイ: {departmentCategorySurveyName}
-                </div>
-              )}
-              {departmentCategoryPreviousSurveyName && (
-                <div className="text-xs md:text-sm font-medium text-muted-foreground">
-                  以前サーベイ: {departmentCategoryPreviousSurveyName}
-                </div>
-              )}
-            </div>
             <DialogDescription className="text-xs mt-1">
-              各部署のカテゴリ別平均スコアを詳細します（現在サーベイ / 以前サーベイ）
+              各部署のカテゴリ別平均スコアを詳細します（サーベイ1 / サーベイ2）
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-shrink-0 mb-3">
+          <div className="flex-shrink-0 mb-3 space-y-3">
+            {/* Survey Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-sm">サーベイ1</Label>
+                <Select
+                  value={selectedDepartmentCategorySurvey1?.toString() || ""}
+                  onValueChange={async (value) => {
+                    const surveyId = value ? parseInt(value, 10) : null
+                    setSelectedDepartmentCategorySurvey1(surveyId)
+                    if (surveyId) {
+                      setDepartmentCategoryLoading(true)
+                      try {
+                        const response = await api.organizationalSurveySummary.getDepartmentCategory(surveyId.toString())
+                        if (response?.success && response.departmentCategoryScores) {
+                          setDepartmentCategoryData(response.departmentCategoryScores)
+                          setDepartmentCategorySurveyName(response.surveyName || null)
+                        } else {
+                          setDepartmentCategoryData([])
+                          setDepartmentCategorySurveyName(null)
+                        }
+                      } catch (error) {
+                        console.error("Failed to load department category scores:", error)
+                        setDepartmentCategoryData([])
+                        setDepartmentCategorySurveyName(null)
+                      } finally {
+                        setDepartmentCategoryLoading(false)
+                      }
+                    } else {
+                      setDepartmentCategoryData([])
+                      setDepartmentCategorySurveyName(null)
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full text-sm h-9 sm:h-10">
+                    <SelectValue placeholder="サーベイ1を選択" />
+                  </SelectTrigger>
+                  <SelectContent className="!z-[110]">
+                    {availableSurveys.map((survey) => (
+                      <SelectItem 
+                        key={survey.id} 
+                        value={survey.id.toString()}
+                        disabled={selectedDepartmentCategorySurvey2 === survey.id}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium">{survey.name}</span>
+                          {survey.endDate && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(survey.endDate).toLocaleDateString("ja-JP")}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm">サーベイ2</Label>
+                <Select
+                  value={selectedDepartmentCategorySurvey2?.toString() || "none"}
+                  onValueChange={async (value) => {
+                    if (value === "none") {
+                      setSelectedDepartmentCategorySurvey2(null)
+                      setDepartmentCategoryPreviousData([])
+                      setDepartmentCategoryPreviousSurveyName(null)
+                    } else {
+                      const surveyId = parseInt(value, 10)
+                      setSelectedDepartmentCategorySurvey2(surveyId)
+                      setDepartmentCategoryLoading(true)
+                      try {
+                        const response = await api.organizationalSurveySummary.getDepartmentCategory(surveyId.toString())
+                        if (response?.success && response.departmentCategoryScores) {
+                          setDepartmentCategoryPreviousData(response.departmentCategoryScores)
+                          setDepartmentCategoryPreviousSurveyName(response.surveyName || null)
+                        } else {
+                          setDepartmentCategoryPreviousData([])
+                          setDepartmentCategoryPreviousSurveyName(null)
+                        }
+                      } catch (error) {
+                        console.error("Failed to load previous department category scores:", error)
+                        setDepartmentCategoryPreviousData([])
+                        setDepartmentCategoryPreviousSurveyName(null)
+                      } finally {
+                        setDepartmentCategoryLoading(false)
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger className="w-full text-sm h-9 sm:h-10">
+                    <SelectValue placeholder="サーベイ2を選択（任意）" />
+                  </SelectTrigger>
+                  <SelectContent className="!z-[110]">
+                    <SelectItem value="none">なし</SelectItem>
+                    {availableSurveys.map((survey) => (
+                      <SelectItem 
+                        key={survey.id} 
+                        value={survey.id.toString()}
+                        disabled={selectedDepartmentCategorySurvey1 === survey.id}
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium">{survey.name}</span>
+                          {survey.endDate && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(survey.endDate).toLocaleDateString("ja-JP")}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {/* Search */}
             <div className="relative">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -3133,35 +3324,35 @@ export default function DashboardPage() {
                     {departmentCategoryPreviousData.length > 0 && (
                       <TableRow>
                         {/* 参加者 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 変化意識 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 成果視点 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 行動優先 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 結果明確 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 自己評価 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 時感覚 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 位置認識 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 免責意識 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                         {/* 総合 */}
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">現在</TableHead>
-                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">以前</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ1</TableHead>
+                        <TableHead className="text-[10px] md:text-xs whitespace-nowrap px-1 md:px-0.5 py-1.5 text-center bg-muted/30">サーベイ2</TableHead>
                       </TableRow>
                     )}
                   </TableHeader>
@@ -3538,111 +3729,31 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">フィルター条件</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {/* Survey Multi-Select */}
+                {/* Survey Single Select */}
                 <div className="space-y-2">
-                  <Label className="text-sm">サーベイ（複数選択）</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-between text-sm h-9 sm:h-10">
-                        <span className="truncate flex-1 text-left">
-                        {selectedSurveyIds.length === 0
-                          ? "サーベイを選択"
-                          : `${selectedSurveyIds.length}個選択中`}
-                        </span>
-                        <ChevronDown className="h-4 w-4 opacity-50 ml-2 flex-shrink-0" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent 
-                      className="w-[var(--radix-popover-trigger-width)] p-0 !z-[110]"
-                      align="start"
-                      side="bottom"
-                      sideOffset={4}
-                      style={{ 
-                        width: 'var(--radix-popover-trigger-width)',
-                        maxWidth: 'calc(100vw - 2rem)',
-                        WebkitOverflowScrolling: 'touch',
-                        touchAction: 'pan-y'
-                      } as React.CSSProperties}
-                    >
-                      <div 
-                        className="p-2 space-y-1 sm:space-y-2 max-h-[60vh] sm:max-h-60 overflow-y-auto overscroll-contain"
-                        style={{ 
-                          WebkitOverflowScrolling: 'touch',
-                          overflowY: 'auto',
-                          scrollBehavior: 'smooth',
-                          touchAction: 'pan-y'
-                        } as React.CSSProperties}
-                        onWheel={(e) => {
-                          // Ensure wheel scrolling works
-                          e.currentTarget.scrollTop += e.deltaY
-                        }}
-                      >
-                        {availableSurveys.map((survey) => (
-                          <div
-                            key={survey.id}
-                            className="flex items-start space-x-2 p-2 sm:p-2.5 hover:bg-muted active:bg-muted rounded-sm cursor-pointer touch-manipulation min-h-[44px] sm:min-h-auto"
-                            onClick={() => {
-                              setSelectedSurveyIds((prev) =>
-                                prev.includes(survey.id)
-                                  ? prev.filter((id) => id !== survey.id)
-                                  : [...prev, survey.id]
-                              )
-                            }}
-                          >
-                            <Checkbox
-                              checked={selectedSurveyIds.includes(survey.id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedSurveyIds((prev) => [...prev, survey.id])
-                                } else {
-                                  setSelectedSurveyIds((prev) => prev.filter((id) => id !== survey.id))
-                                }
-                              }}
-                              className="mt-0.5 sm:mt-0"
-                            />
-                            <Label className="flex-1 cursor-pointer text-sm sm:text-base">
-                              <div className="font-medium break-words">{survey.name}</div>
-                              {survey.endDate && (
-                                <div className="text-xs text-muted-foreground mt-0.5">
-                                  {new Date(survey.endDate).toLocaleDateString("ja-JP")}
-                                </div>
-                              )}
-                            </Label>
+                  <Label className="text-sm">サーベイ（単一選択）</Label>
+                  <Select
+                    value={selectedSurveyId?.toString() || ""}
+                    onValueChange={(value) => setSelectedSurveyId(value ? parseInt(value, 10) : null)}
+                  >
+                    <SelectTrigger className="w-full text-sm h-9 sm:h-10">
+                      <SelectValue placeholder="サーベイを選択" />
+                    </SelectTrigger>
+                    <SelectContent className="!z-[110]">
+                      {availableSurveys.map((survey) => (
+                        <SelectItem key={survey.id} value={survey.id.toString()}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{survey.name}</span>
+                            {survey.endDate && (
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(survey.endDate).toLocaleDateString("ja-JP")}
+                              </span>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                      {selectedSurveyIds.length > 0 && (
-                        <div className="border-t p-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-sm h-9 sm:h-8 touch-manipulation"
-                            onClick={() => setSelectedSurveyIds([])}
-                          >
-                            すべてクリア
-                          </Button>
-                        </div>
-                      )}
-                    </PopoverContent>
-                  </Popover>
-                  {selectedSurveyIds.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 sm:gap-1 mt-2">
-                      {selectedSurveyIds.map((id) => {
-                        const survey = availableSurveys.find((s) => s.id === id)
-                        return survey ? (
-                          <Badge
-                            key={id}
-                            variant="secondary"
-                            className="text-xs cursor-pointer touch-manipulation px-2 py-1"
-                            onClick={() => setSelectedSurveyIds((prev) => prev.filter((sid) => sid !== id))}
-                          >
-                            <span className="truncate max-w-[120px] sm:max-w-none">{survey.name}</span>
-                            <X className="h-3 w-3 ml-1 flex-shrink-0" />
-                          </Badge>
-                        ) : null
-                      })}
-                    </div>
-                  )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Department Multi-Select */}
@@ -3928,13 +4039,13 @@ export default function DashboardPage() {
             <div className="flex justify-end pt-2">
               <Button
                 onClick={async () => {
-                  if (selectedSurveyIds.length === 0 || !selectedCategoryId) {
+                  if (!selectedSurveyId || !selectedCategoryId) {
                     return
                   }
                   setDetailedResponsesLoading(true)
                   try {
                     const response = await api.organizationalSurveySummary.getDetailedResponses(
-                      selectedSurveyIds.map((id) => id.toString()),
+                      [selectedSurveyId.toString()],
                       selectedDepartmentIds.map((id) => id.toString()),
                       selectedJobIds.map((id) => id.toString()),
                       selectedCategoryId.toString()
@@ -3954,7 +4065,7 @@ export default function DashboardPage() {
                     setDetailedResponsesLoading(false)
                   }
                 }}
-                disabled={selectedSurveyIds.length === 0 || !selectedCategoryId || detailedResponsesLoading}
+                disabled={!selectedSurveyId || !selectedCategoryId || detailedResponsesLoading}
                 className="min-w-32"
               >
                 {detailedResponsesLoading ? "読み込み中..." : "詳細を詳細"}
@@ -3968,10 +4079,10 @@ export default function DashboardPage() {
                 ([_, id]) => id === selectedCategoryId
               )?.[0] || `カテゴリ ${selectedCategoryId}`
               
-              // Get survey names (comma-separated if multiple)
-              const surveyNames = selectedSurveyIds
-                .map(id => availableSurveys.find(s => s.id === id)?.name || `サーベイ ${id}`)
-                .join('、')
+              // Get survey name
+              const surveyName = selectedSurveyId
+                ? (availableSurveys.find(s => s.id === selectedSurveyId)?.name || `サーベイ ${selectedSurveyId}`)
+                : 'サーベイ'
               
               // Get all problems (questions) - they should be the same across all surveys
               const problems = detailedResponsesData.problems
@@ -4170,7 +4281,7 @@ export default function DashboardPage() {
                   <div className="mb-4 space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">サーベイ:</span>
-                      <span>{surveyNames}</span>
+                      <span>{surveyName}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">カテゴリ:</span>

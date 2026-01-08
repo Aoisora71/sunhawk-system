@@ -8,11 +8,13 @@ import type { AuthenticatedUser } from "@/lib/middleware"
  * GET /api/growth-survey-results/free-text - Get growth survey free text responses
  * Query params: 
  *   - userId (optional) - User ID (admin only, if not provided returns current user's responses)
+ *   - surveyId (optional) - Survey ID to filter responses
  */
 async function handleGet(request: NextRequest, user: AuthenticatedUser) {
   try {
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get("userId") // For admin to get specific user's responses
+    const surveyId = searchParams.get("surveyId") // Survey ID to filter responses
 
     // Get free text responses
     // Admin can see all or specific user's, regular users only their own
@@ -45,6 +47,15 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
       // Regular user can only see their own
       queryText += ` AND gsftr.uid = $${paramIndex++}`
       params.push(user.userId)
+    }
+
+    if (surveyId) {
+      const surveyIdNum = parseInt(surveyId, 10)
+      if (isNaN(surveyIdNum)) {
+        return badRequestResponse("無効なsurveyIdです")
+      }
+      queryText += ` AND gsftr.gsid = $${paramIndex++}`
+      params.push(surveyIdNum)
     }
 
     queryText += ` ORDER BY gsftr.gsid, gsftr.gqid`
