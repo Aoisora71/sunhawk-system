@@ -80,8 +80,8 @@ async function handlePost(request: NextRequest, user: AdminUser) {
     const insertedNotifications = []
     for (const u of usersResult.rows) {
       const insertResult = await query<{ id: number }>(
-        `INSERT INTO notifications (user_id, survey_id, title, message, created_by)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO notifications (user_id, survey_id, title, message, created_by, is_read, created_at)
+         VALUES ($1, $2, $3, $4, $5, false, CURRENT_TIMESTAMP)
          RETURNING id`,
         [u.id, surveyId, notificationTitle, notificationMessage, user.userId]
       )

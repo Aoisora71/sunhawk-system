@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Mail, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Mail, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react"
 import { toast } from "@/lib/toast"
 import api from "@/lib/api-client"
 import type { Survey } from "@/lib/types"
@@ -44,6 +44,8 @@ export function SurveyResponseStatusSection() {
   const [isNotificationDialogOpen, setIsNotificationDialogOpen] = useState(false)
   const [notificationMessage, setNotificationMessage] = useState("")
   const [isSending, setIsSending] = useState(false)
+  const [isClearNotificationsDialogOpen, setIsClearNotificationsDialogOpen] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
   const [stats, setStats] = useState({
     totalEmployees: 0,
     respondedCount: 0,
@@ -209,9 +211,9 @@ export function SurveyResponseStatusSection() {
 
         // Auto-select all non-responders
         const nonResponderIds = data.employees
-          .filter((emp: EmployeeStatus) => emp.status === "not_responded")
+          .filter((emp: EmployeeStatus) => emp.status === "not_responded" || emp.status === "responding")
           .map((emp: EmployeeStatus) => emp.id)
-        setSelectedEmployeeIds(new Set(nonResponderIds))
+          setSelectedEmployeeIds(new Set(nonResponderIds))
       } else {
         console.error('[Frontend] Failed to fetch response status:', data)
         toast.error(data.error || "回答状況の取得に失敗しました")
@@ -238,7 +240,7 @@ export function SurveyResponseStatusSection() {
 
   const handleSelectAllNonResponders = () => {
     const nonResponderIds = employees
-      .filter((emp) => emp.status === "not_responded")
+      .filter((emp) => emp.status === "not_responded" || emp.status === "responding")
       .map((emp) => emp.id)
     setSelectedEmployeeIds(new Set(nonResponderIds))
   }
@@ -253,6 +255,20 @@ export function SurveyResponseStatusSection() {
       return
     }
 
+    // Filter out users who have already responded (responded status)
+    // Only send notifications to not_responded and responding users
+    const eligibleUserIds = employees
+      .filter((emp) => 
+        selectedEmployeeIds.has(emp.id) && 
+        (emp.status === "not_responded" || emp.status === "responding")
+      )
+      .map((emp) => emp.id)
+
+    if (eligibleUserIds.length === 0) {
+      toast.error("通知を送信できる従業員がありません（応答完了済みの従業員は除外されます）")
+      return
+    }
+
     setIsSending(true)
     try {
       // Cookies are automatically sent with requests
@@ -263,7 +279,7 @@ export function SurveyResponseStatusSection() {
         },
         body: JSON.stringify({
           surveyId: selectedSurveyId,
-          userIds: Array.from(selectedEmployeeIds),
+          userIds: eligibleUserIds,
           message: notificationMessage || undefined,
         }),
       })
@@ -286,7 +302,33 @@ export function SurveyResponseStatusSection() {
     }
   }
 
-  const nonResponders = employees.filter((emp) => emp.status === "not_responded")
+  const handleClearNotifications = async () => {
+    setIsClearing(true)
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success(data.message || "通知履歴をすべて削除しました")
+        setIsClearNotificationsDialogOpen(false)
+      } else {
+        toast.error(data.error || "通知履歴の削除に失敗しました")
+      }
+    } catch (error: any) {
+      console.error("Error clearing notifications:", error)
+      toast.error("通知履歴の削除に失敗しました")
+    } finally {
+      setIsClearing(false)
+    }
+  }
+
+  const nonResponders = employees.filter((emp) => emp.status === "not_responded" || emp.status === "responding")
   const selectedNonResponders = nonResponders.filter((emp) => selectedEmployeeIds.has(emp.id))
 
   // Sort employees based on sortConfig
@@ -602,6 +644,15 @@ export function SurveyResponseStatusSection() {
                   <Mail className="mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   通知を送信 ({selectedEmployeeIds.size}名)
                 </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setIsClearNotificationsDialogOpen(true)}
+                  className="w-full sm:w-auto text-xs sm:text-sm h-9 sm:h-10"
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  通知履歴初期化
+                </Button>
               </div>
             )}
 
@@ -693,7 +744,7 @@ export function SurveyResponseStatusSection() {
                     {sortedEmployees.map((emp) => (
                       <TableRow key={emp.id}>
                         <TableCell>
-                          {emp.status === "not_responded" && (
+                          {(emp.status === "not_responded" || emp.status === "responding") && (
                             <Checkbox
                               checked={selectedEmployeeIds.has(emp.id)}
                               onCheckedChange={(checked) => handleSelectEmployee(emp.id, checked as boolean)}
@@ -786,6 +837,36 @@ export function SurveyResponseStatusSection() {
                 className="w-full sm:w-auto text-sm sm:text-base h-10 sm:h-11"
               >
                 {isSending ? "送信中..." : "通知を送信"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Clear Notifications Confirmation Dialog */}
+        <Dialog open={isClearNotificationsDialogOpen} onOpenChange={setIsClearNotificationsDialogOpen}>
+          <DialogContent className="w-[95vw] sm:w-full max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg sm:text-xl">通知履歴初期化</DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm">
+                通知テーブルのすべてのデータを削除します。この操作は取り消せません。実行しますか？
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setIsClearNotificationsDialogOpen(false)}
+                disabled={isClearing}
+                className="w-full sm:w-auto text-sm sm:text-base h-10 sm:h-11"
+              >
+                キャンセル
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleClearNotifications}
+                disabled={isClearing}
+                className="w-full sm:w-auto text-sm sm:text-base h-10 sm:h-11"
+              >
+                {isClearing ? "削除中..." : "削除"}
               </Button>
             </DialogFooter>
           </DialogContent>

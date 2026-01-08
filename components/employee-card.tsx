@@ -11,6 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import type { Employee } from "@/lib/organization-data"
 import { getPositionColor } from "@/lib/position-colors"
 import { getDepartmentColor } from "@/lib/department-colors"
@@ -43,13 +45,15 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
   }>>([])
   const [isLoadingOrg, setIsLoadingOrg] = useState(false)
   const [isLoadingGrowth, setIsLoadingGrowth] = useState(false)
+  const [availableOrgSurveys, setAvailableOrgSurveys] = useState<Array<{ id: number; name: string; startDate: string | null; endDate: string | null }>>([])
+  const [availableGrowthSurveys, setAvailableGrowthSurveys] = useState<Array<{ id: number; name: string; startDate: string | null; endDate: string | null }>>([])
+  const [selectedOrgSurveyId, setSelectedOrgSurveyId] = useState<number | null>(null)
+  const [selectedGrowthSurveyId, setSelectedGrowthSurveyId] = useState<number | null>(null)
 
   const positionColor = getPositionColor(employee.position)
   const departmentColor = getDepartmentColor(employee.department || "未設定")
 
-  const fetchOrganizationalResponses = async () => {
-    if (orgResponses.length > 0) return // Already loaded
-    
+  const fetchOrganizationalResponses = async (surveyId?: number) => {
     try {
       setIsLoadingOrg(true)
       // Convert employee.id to number (it might be string)
@@ -60,38 +64,56 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
         return
       }
 
-      // Get all surveys first, then fetch responses for each
+      // Get all surveys first to populate available surveys list
       const surveysResponse = await api.surveys.list()
       if (surveysResponse?.success && surveysResponse.surveys) {
-        const allResponses: typeof orgResponses = []
-        for (const survey of surveysResponse.surveys) {
-          if (survey.surveyType === "organizational") {
-            try {
-              const response = await api.organizationalSurveyResults.getFreeTextResponses(
-                survey.id.toString(),
-                employeeIdNum.toString()
-              )
-              if (response?.success && response.responses) {
-                allResponses.push(...response.responses)
-              }
-            } catch (error) {
-              console.error(`Error fetching responses for survey ${survey.id}:`, error)
+        const orgSurveys = surveysResponse.surveys
+          .filter((s: any) => s.surveyType === "organizational")
+          .map((s: any) => ({
+            id: Number(s.id),
+            name: s.name || `サーベイ ${s.id}`,
+            startDate: s.startDate || null,
+            endDate: s.endDate || null,
+          }))
+          .sort((a, b) => {
+            const aEnd = a.endDate ? new Date(a.endDate).getTime() : 0
+            const bEnd = b.endDate ? new Date(b.endDate).getTime() : 0
+            return bEnd - aEnd
+          })
+        setAvailableOrgSurveys(orgSurveys)
+
+        // If no survey selected, use the first one as default
+        const targetSurveyId = surveyId || (orgSurveys.length > 0 ? orgSurveys[0].id : null)
+        if (targetSurveyId) {
+          setSelectedOrgSurveyId(targetSurveyId)
+          try {
+            const response = await api.organizationalSurveyResults.getFreeTextResponses(
+              targetSurveyId.toString(),
+              employeeIdNum.toString()
+            )
+            if (response?.success && response.responses) {
+              setOrgResponses(response.responses)
+            } else {
+              setOrgResponses([])
             }
+          } catch (error) {
+            console.error(`Error fetching responses for survey ${targetSurveyId}:`, error)
+            setOrgResponses([])
           }
+        } else {
+          setOrgResponses([])
         }
-        setOrgResponses(allResponses)
       }
     } catch (error) {
       console.error("Error fetching organizational responses:", error)
       toast.error("ソシキサーベイの回答取得に失敗しました")
+      setOrgResponses([])
     } finally {
       setIsLoadingOrg(false)
     }
   }
 
-  const fetchGrowthResponses = async () => {
-    if (growthResponses.length > 0) return // Already loaded
-    
+  const fetchGrowthResponses = async (surveyId?: number) => {
     try {
       setIsLoadingGrowth(true)
       // Convert employee.id to number (it might be string)
@@ -102,13 +124,50 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
         return
       }
 
-      const response = await api.growthSurveyResults.getFreeTextResponses(employeeIdNum.toString())
-      if (response?.success && response.responses) {
-        setGrowthResponses(response.responses)
+      // Get all surveys first to populate available surveys list
+      const surveysResponse = await api.surveys.list()
+      if (surveysResponse?.success && surveysResponse.surveys) {
+        const growthSurveys = surveysResponse.surveys
+          .filter((s: any) => s.surveyType === "growth")
+          .map((s: any) => ({
+            id: Number(s.id),
+            name: s.name || `サーベイ ${s.id}`,
+            startDate: s.startDate || null,
+            endDate: s.endDate || null,
+          }))
+          .sort((a, b) => {
+            const aEnd = a.endDate ? new Date(a.endDate).getTime() : 0
+            const bEnd = b.endDate ? new Date(b.endDate).getTime() : 0
+            return bEnd - aEnd
+          })
+        setAvailableGrowthSurveys(growthSurveys)
+
+        // If no survey selected, use the first one as default
+        const targetSurveyId = surveyId || (growthSurveys.length > 0 ? growthSurveys[0].id : null)
+        if (targetSurveyId) {
+          setSelectedGrowthSurveyId(targetSurveyId)
+          try {
+            const response = await api.growthSurveyResults.getFreeTextResponses(
+              employeeIdNum.toString(),
+              targetSurveyId.toString()
+            )
+            if (response?.success && response.responses) {
+              setGrowthResponses(response.responses)
+            } else {
+              setGrowthResponses([])
+            }
+          } catch (error) {
+            console.error(`Error fetching responses for survey ${targetSurveyId}:`, error)
+            setGrowthResponses([])
+          }
+        } else {
+          setGrowthResponses([])
+        }
       }
     } catch (error) {
       console.error("Error fetching growth responses:", error)
       toast.error("グロースサーベイの回答取得に失敗しました")
+      setGrowthResponses([])
     } finally {
       setIsLoadingGrowth(false)
     }
@@ -293,7 +352,21 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
       </CardContent>
 
       {/* 基礎資料詳細モーダル */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog 
+        open={isModalOpen} 
+        onOpenChange={(open) => {
+          setIsModalOpen(open)
+          if (!open) {
+            // Reset when closing
+            setSelectedOrgSurveyId(null)
+            setSelectedGrowthSurveyId(null)
+            setOrgResponses([])
+            setGrowthResponses([])
+            setAvailableOrgSurveys([])
+            setAvailableGrowthSurveys([])
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{employee.name} - 基礎資料</DialogTitle>
@@ -309,6 +382,34 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
             
             {/* ソシキサーベイタブ */}
             <TabsContent value="organizational" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label className="text-sm">組織サーベイ</Label>
+                <Select
+                  value={selectedOrgSurveyId?.toString() || ""}
+                  onValueChange={async (value) => {
+                    const surveyId = value ? parseInt(value, 10) : null
+                    await fetchOrganizationalResponses(surveyId || undefined)
+                  }}
+                >
+                  <SelectTrigger className="w-full text-sm h-9 sm:h-10">
+                    <SelectValue placeholder="組織サーベイを選択" />
+                  </SelectTrigger>
+                  <SelectContent className="!z-[110]">
+                    {availableOrgSurveys.map((survey) => (
+                      <SelectItem key={survey.id} value={survey.id.toString()}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{survey.name}</span>
+                          {survey.endDate && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(survey.endDate).toLocaleDateString("ja-JP")}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {isLoadingOrg ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -316,29 +417,20 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
                 </div>
               ) : orgResponses.length > 0 ? (
                 <div className="space-y-6">
-                  {Array.from(new Set(orgResponses.map(r => r.surveyId))).map((surveyId) => {
-                    const surveyResponses = orgResponses.filter(r => r.surveyId === surveyId)
-                    const surveyName = surveyResponses[0]?.surveyName || `サーベイID: ${surveyId}`
-                    return (
-                      <Card key={surveyId}>
-                        <CardHeader>
-                          <CardTitle className="text-base sm:text-lg">{surveyName}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {surveyResponses.map((response, idx) => (
-                            <div key={idx} className="space-y-2 pb-4 border-b border-border last:border-0 last:pb-0">
-                              <div className="font-medium text-sm text-foreground">
-                                {response.questionText || `質問ID: ${response.questionId}`}
-                              </div>
-                              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
-                                {response.answerText || "回答なし"}
-                              </div>
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+                  {orgResponses.map((response, idx) => (
+                    <Card key={idx}>
+                      <CardHeader>
+                        <CardTitle className="text-base sm:text-lg">
+                          {response.questionText || `質問ID: ${response.questionId}`}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
+                          {response.answerText || "回答なし"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
@@ -349,6 +441,34 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
 
             {/*グロースサーベイタブ */}
             <TabsContent value="growth" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label className="text-sm">成長サーベイ</Label>
+                <Select
+                  value={selectedGrowthSurveyId?.toString() || ""}
+                  onValueChange={async (value) => {
+                    const surveyId = value ? parseInt(value, 10) : null
+                    await fetchGrowthResponses(surveyId || undefined)
+                  }}
+                >
+                  <SelectTrigger className="w-full text-sm h-9 sm:h-10">
+                    <SelectValue placeholder="成長サーベイを選択" />
+                  </SelectTrigger>
+                  <SelectContent className="!z-[110]">
+                    {availableGrowthSurveys.map((survey) => (
+                      <SelectItem key={survey.id} value={survey.id.toString()}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{survey.name}</span>
+                          {survey.endDate && (
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(survey.endDate).toLocaleDateString("ja-JP")}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {isLoadingGrowth ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -356,29 +476,20 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
                 </div>
               ) : growthResponses.length > 0 ? (
                 <div className="space-y-6">
-                  {Array.from(new Set(growthResponses.map(r => r.surveyId))).map((surveyId) => {
-                    const surveyResponses = growthResponses.filter(r => r.surveyId === surveyId)
-                    const surveyName = surveyResponses[0]?.surveyName || `サーベイID: ${surveyId}`
-                    return (
-                      <Card key={surveyId}>
-                        <CardHeader>
-                          <CardTitle className="text-base sm:text-lg">{surveyName}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {surveyResponses.map((response, idx) => (
-                            <div key={idx} className="space-y-2 pb-4 border-b border-border last:border-0 last:pb-0">
-                              <div className="font-medium text-sm text-foreground">
-                                {response.questionText || `質問ID: ${response.questionId}`}
-                              </div>
-                              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
-                                {response.answerText || "回答なし"}
-                              </div>
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
+                  {growthResponses.map((response, idx) => (
+                    <Card key={idx}>
+                      <CardHeader>
+                        <CardTitle className="text-base sm:text-lg">
+                          {response.questionText || `質問ID: ${response.questionId}`}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
+                          {response.answerText || "回答なし"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
