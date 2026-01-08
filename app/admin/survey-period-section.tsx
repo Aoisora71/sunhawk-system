@@ -335,25 +335,12 @@ export function SurveyPeriodSection() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isLoading}
-              className="h-9 w-9 p-0 flex-shrink-0"
-              title="更新"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
+           
             <Dialog open={isAddSurveyOpen} onOpenChange={setIsAddSurveyOpen}>
               <DialogTrigger asChild>
-                <Button 
-                  size="sm" 
-                  className="flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 h-9 sm:h-10 text-xs sm:text-sm font-medium whitespace-nowrap flex-shrink-0 min-w-fit"
-                >
-                  <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
-                  <span className="hidden sm:inline">新規サーベイ期間設定</span>
-                  <span className="sm:hidden">新規追加</span>
+                <Button size="sm" className="w-full sm:w-auto text-xs sm:text-sm">
+                  <Plus className="mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  新規サーベイ期間設定
                 </Button>
               </DialogTrigger>
             <DialogContent className="w-[95vw] sm:w-full max-w-2xl max-h-[90vh] overflow-y-auto">
