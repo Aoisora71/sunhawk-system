@@ -249,6 +249,7 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       // Important: Each row in growth_survey_responses represents one question,
       // and the result array contains responses from multiple users.
       // We need to count distinct question IDs per user, not per result array element.
+      // NOTE: Skipped questions (s: null) are also counted as answered for accurate response rate calculation
       const userResponseCountsResult = await query<{
         uid: number
         answered_count: number
@@ -261,6 +262,8 @@ async function handleGet(request: NextRequest, user: AdminUser) {
          WHERE gsr.${surveyColumn} = $1
            AND (elem->>'uid') IS NOT NULL
            AND ((elem->>'uid')::integer IS NOT NULL OR (elem->>'employeeId')::integer IS NOT NULL)
+           -- Include both answered questions (s IS NOT NULL) and skipped questions (s IS NULL)
+           -- Both are counted as answered for response rate calculation
          GROUP BY (elem->>'uid')::integer`,
         [surveyId]
       )
@@ -331,20 +334,20 @@ async function handleGet(request: NextRequest, user: AdminUser) {
     
     console.log(`[Survey Response Status] Response map populated with ${responseMap.size} entries`)
 
-    // Get department and job names
-    const departmentsResult = await query<{ id: number; name: string }>(
-      "SELECT id, name FROM departments"
+    // Get department and job names with codes
+    const departmentsResult = await query<{ id: number; name: string; code: string | null }>(
+      "SELECT id, name, code FROM departments"
     )
-    const jobsResult = await query<{ id: number; name: string }>("SELECT id, name FROM jobs")
+    const jobsResult = await query<{ id: number; name: string; code: string | null }>("SELECT id, name, code FROM jobs")
 
-    const departmentsMap = new Map<number, string>()
+    const departmentsMap = new Map<number, { name: string; code: string | null }>()
     for (const dept of departmentsResult.rows) {
-      departmentsMap.set(dept.id, dept.name)
+      departmentsMap.set(dept.id, { name: dept.name, code: dept.code })
     }
 
-    const jobsMap = new Map<number, string>()
+    const jobsMap = new Map<number, { name: string; code: string | null }>()
     for (const job of jobsResult.rows) {
-      jobsMap.set(job.id, job.name)
+      jobsMap.set(job.id, { name: job.name, code: job.code })
     }
 
     // Combine employee data with response status
@@ -379,14 +382,19 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       // Debug logging
       console.log(`[Survey Response Status] Employee ${emp.id} (${emp.name}): final status=${status}, responseRate=${responseRate}, hasResponse=${!!response}`)
 
+      const deptInfo = emp.department_id ? departmentsMap.get(emp.department_id) : null
+      const jobInfo = emp.job_id ? jobsMap.get(emp.job_id) : null
+
       return {
         id: emp.id,
         name: emp.name,
         email: emp.email,
         departmentId: emp.department_id,
-        departmentName: emp.department_id ? departmentsMap.get(emp.department_id) || "-" : "-",
+        departmentName: deptInfo?.name || "-",
+        departmentCode: deptInfo?.code || null,
         jobId: emp.job_id,
-        jobName: emp.job_id ? jobsMap.get(emp.job_id) || "-" : "-",
+        jobName: jobInfo?.name || "-",
+        jobCode: jobInfo?.code || null,
         role: emp.role,
         responseRate: responseRate,
         status: status,

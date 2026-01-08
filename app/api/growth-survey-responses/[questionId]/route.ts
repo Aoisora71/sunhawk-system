@@ -40,7 +40,12 @@ async function handlePut(
     // Check both questionType (new) and answerType (legacy) for free text questions
     const isFreeTextQuestion = question.questionType === "free_text" || question.answerType === "text"
 
-    if (isFreeTextQuestion) {
+    // Handle skipped questions first (applies to both single choice and free text questions)
+    // Skipped questions are marked as answered but have null score
+    if (answerValue === "skipped") {
+      finalAnswerText = "スキップ"
+      finalScore = null // Skipped questions have null score and are not included in score calculations
+    } else if (isFreeTextQuestion) {
       if (typeof answerText !== "string" || answerText.trim().length === 0) {
         return badRequestResponse("回答を入力してください")
       }
@@ -52,19 +57,13 @@ async function handlePut(
         return badRequestResponse("回答を選択してください")
       }
       
-      // Handle skipped questions (special value "skipped" indicates the question was skipped)
-      if (answerValue === "skipped") {
-        finalAnswerText = "スキップ"
-        finalScore = null // Skipped questions have null score and are not included in score calculations
-      } else {
-        const options = getGrowthSurveyOptions(question)
-        const matchedOption = options.find((option) => option.value === answerValue)
-        if (!matchedOption) {
-          return badRequestResponse("無効な選択肢です")
-        }
-        finalAnswerText = matchedOption.label
-        finalScore = matchedOption.score ?? null
+      const options = getGrowthSurveyOptions(question)
+      const matchedOption = options.find((option) => option.value === answerValue)
+      if (!matchedOption) {
+        return badRequestResponse("無効な選択肢です")
       }
+      finalAnswerText = matchedOption.label
+      finalScore = matchedOption.score ?? null
     }
 
     const activeSurvey = await getActiveGrowthSurvey()
@@ -252,9 +251,11 @@ async function handlePut(
 
     // Calculate user's progress (count only from growth_survey_responses table)
     // Free text responses are also stored in growth_survey_responses, so we don't need to count from growth_survey_free_text_responses
+    // IMPORTANT: This count includes skipped questions (s: null) as answered, since they are stored in the result array
     const totalQuestions = await getAccessibleGrowthSurveyQuestionCount(user.userId, { activeOnly: true }) || 0
     
-    // Count all responses (both single choice and free text) from growth_survey_responses table only
+    // Count all responses (both single choice, free text, and skipped) from growth_survey_responses table only
+    // Skipped questions (s: null) are also counted as answered for accurate progress calculation
     const userAnsweredQuestions = await query<{ count: number }>(
       `SELECT COUNT(DISTINCT ${questionColumn}) as count
        FROM growth_survey_responses
@@ -273,18 +274,99 @@ async function handlePut(
     // Get completedAt if survey is completed
     let completedAt: string | null = null
     if (answeredAll) {
-      const summaryResult = await query<{ updated_at: string }>(
-        `SELECT updated_at
+      // Calculate category scores from user's responses
+      // Get all responses for this user and survey
+      const userResponsesResult = await query<{
+        category: string | null
+        total_score: number
+      }>(
+        `SELECT ${categoryColumn} as category, total_score
+         FROM growth_survey_responses
+         WHERE ${surveyColumn} = $1
+           AND EXISTS (
+             SELECT 1 
+             FROM jsonb_array_elements(result) AS elem
+             WHERE (elem->>'uid')::integer = $2 OR (elem->>'employeeId')::integer = $2
+           )`,
+        [activeSurvey.id, user.userId]
+      )
+
+      // Calculate category scores (sum of total_score per category)
+      const categoryScores: Record<string, number> = {
+        "ルール": 0,
+        "組織体制": 0,
+        "評価制度": 0,
+        "週報・会議": 0,
+        "識学サーベイ": 0,
+      }
+
+      for (const row of userResponsesResult.rows) {
+        if (row.category) {
+          // Handle both "週報・会議" and "主保・会議"
+          const normalizedCategory = row.category === "主保・会議" ? "週報・会議" : row.category
+          if (categoryScores.hasOwnProperty(normalizedCategory)) {
+            categoryScores[normalizedCategory] += Number(row.total_score) || 0
+          }
+        }
+      }
+
+      // Calculate total score (average of all category scores)
+      const totalScore = Object.values(categoryScores).reduce((sum, score) => sum + score, 0) / Object.keys(categoryScores).length
+
+      // Check if summary already exists
+      const summaryExisting = await query<{ id: number; updated_at: string }>(
+        `SELECT id, updated_at
          FROM growth_survey_summary
          WHERE uid = $1 AND gsid = $2
          LIMIT 1`,
         [user.userId, activeSurvey.id]
       )
-      if (summaryResult.rows.length > 0) {
-        completedAt = summaryResult.rows[0].updated_at
+
+      if (summaryExisting.rows.length > 0) {
+        // Update existing summary
+        await query(
+          `UPDATE growth_survey_summary 
+           SET cat1_score = $1,
+               cat2_score = $2,
+               cat3_score = $3,
+               cat4_score = $4,
+               cat5_score = $5,
+               total_score = $6,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE uid = $7 AND gsid = $8`,
+          [
+            categoryScores["ルール"],
+            categoryScores["組織体制"],
+            categoryScores["評価制度"],
+            categoryScores["週報・会議"],
+            categoryScores["識学サーベイ"],
+            totalScore,
+            user.userId,
+            activeSurvey.id,
+          ]
+        )
+        completedAt = summaryExisting.rows[0].updated_at
       } else {
-        // If no summary exists yet, use current time as fallback
-        completedAt = new Date().toISOString()
+        // Create new summary
+        const newSummaryResult = await query<{ updated_at: string }>(
+          `INSERT INTO growth_survey_summary (
+            uid, gsid,
+            cat1_score, cat2_score, cat3_score, cat4_score, cat5_score,
+            total_score
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING updated_at`,
+          [
+            user.userId,
+            activeSurvey.id,
+            categoryScores["ルール"],
+            categoryScores["組織体制"],
+            categoryScores["評価制度"],
+            categoryScores["週報・会議"],
+            categoryScores["識学サーベイ"],
+            totalScore,
+          ]
+        )
+        completedAt = newSummaryResult.rows[0]?.updated_at || new Date().toISOString()
       }
     }
 

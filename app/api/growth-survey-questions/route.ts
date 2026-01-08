@@ -21,9 +21,26 @@ async function handleGet(request: NextRequest, user: { userId: number; role: str
     const jobName =
       user.role === "admin" ? (jobFilter && jobFilter.length > 0 ? jobFilter : null) : await getUserJobName(user.userId)
 
+    console.log('[Growth Survey Questions API] User info:', {
+      userId: user.userId,
+      role: user.role,
+      jobName,
+      activeOnly: effectiveActiveOnly,
+      allQuestionsCount: allQuestions.length,
+    })
+
     const filteredQuestions = filterGrowthSurveyQuestionsByJob(allQuestions, jobName, {
       activeOnly: effectiveActiveOnly,
     })
+
+    console.log('[Growth Survey Questions API] Filtered questions count:', filteredQuestions.length)
+    if (filteredQuestions.length === 0 && allQuestions.length > 0) {
+      console.log('[Growth Survey Questions API] No questions after filtering. Sample questions:', allQuestions.slice(0, 3).map(q => ({
+        id: q.id,
+        isActive: q.isActive,
+        targetJobs: q.targetJobs,
+      })))
+    }
 
     return successResponse({ questions: filteredQuestions as GrowthSurveyQuestion[] })
   } catch (error) {

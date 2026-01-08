@@ -35,6 +35,22 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Check if running column exists and get actual column names
+    const columnCheck = await query<{ column_name: string }>(
+      `SELECT column_name 
+       FROM information_schema.columns 
+       WHERE table_name = 'surveys' 
+         AND column_name IN ('running', 'survey_type', 'survey_t')`
+    )
+    const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
+    const actualSurveyTypeColumn = columnCheck.rows.find(r => r.column_name === 'survey_type' || r.column_name === 'survey_t')?.column_name || 'survey_type'
+    
+    console.log('[Survey Period API] Column check:', {
+      hasRunning,
+      actualSurveyTypeColumn,
+      allColumns: columnCheck.rows.map(r => r.column_name)
+    })
+
     // Get the active survey (status = 'active' and within date range)
     // Use CURRENT_DATE to handle date comparisons correctly
     // end_date should include the entire day (end_date >= CURRENT_DATE means end_date is today or later)
@@ -42,48 +58,85 @@ export async function GET(request: NextRequest) {
     let paramIndex = 1
     let filterClause = ""
     if (requestedType) {
-      filterClause = ` AND survey_type = $${paramIndex++}`
+      filterClause = ` AND ${actualSurveyTypeColumn} = $${paramIndex++}`
       params.push(requestedType)
     }
 
-    // Check if running column exists
-    const columnCheck = await query<{ column_name: string }>(
-      `SELECT column_name 
-       FROM information_schema.columns 
-       WHERE table_name = 'surveys' 
-         AND column_name = 'running'`
-    )
-    const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
-
-    // Compare dates properly: start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
-    // This includes surveys where end_date is today (they are still active today)
-    // Using ::date cast ensures we compare only the date part, ignoring time components
-    // Also check running field if it exists
-    const runningFilter = hasRunning ? ' AND (running IS NULL OR running = true)' : ''
+    // First, try to find a survey with running = true (regardless of date)
+    // If not found, then check for surveys within date range
+    let result: any = { rows: [] }
     
-    const result = await query(
-      `SELECT id, name, start_date, end_date, status, survey_type
-       FROM surveys
-       WHERE status = 'active'
-         AND start_date::date <= CURRENT_DATE
-         AND end_date::date >= CURRENT_DATE
-         ${runningFilter}
-         ${filterClause}
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      params
-    )
+    if (hasRunning) {
+      // First query: Look for running = true surveys (no date check)
+      const runningQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
+        FROM surveys
+        WHERE status = 'active'
+          AND running = true
+          ${filterClause}
+        ORDER BY created_at DESC
+        LIMIT 1`
+      
+      console.log('[Survey Period API] Running query:', runningQuery)
+      console.log('[Survey Period API] Params:', params)
+      
+      result = await query(runningQuery, params)
+      
+      console.log('[Survey Period API] Running = true result rows:', result.rows.length)
+      if (result.rows.length > 0) {
+        console.log('[Survey Period API] Found running = true survey:', JSON.stringify(result.rows[0], null, 2))
+      }
+    }
+    
+    // If no running = true survey found, check date range
+    if (result.rows.length === 0) {
+      const dateFilter = ' AND start_date::date <= CURRENT_DATE AND end_date::date >= CURRENT_DATE'
+      const dateQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
+        FROM surveys
+        WHERE status = 'active'
+          ${dateFilter}
+          ${filterClause}
+        ORDER BY created_at DESC
+        LIMIT 1`
+      
+      console.log('[Survey Period API] Date query:', dateQuery)
+      console.log('[Survey Period API] Params:', params)
+      
+      result = await query(dateQuery, params)
+      
+      console.log('[Survey Period API] Date range result rows:', result.rows.length)
+      if (result.rows.length > 0) {
+        console.log('[Survey Period API] Found date range survey:', JSON.stringify(result.rows[0], null, 2))
+      } else {
+        // Debug: Check what surveys exist
+        const debugQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
+          FROM surveys
+          WHERE status = 'active'${filterClause}
+          ORDER BY created_at DESC`
+        const debugResult = await query(debugQuery, params)
+        console.log('[Survey Period API] All active surveys:', JSON.stringify(debugResult.rows, null, 2))
+        
+        // Also check specifically for running = true surveys
+        if (hasRunning) {
+          const runningCheckQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
+            FROM surveys
+            WHERE status = 'active' AND running = true${filterClause}
+            ORDER BY created_at DESC`
+          const runningCheckResult = await query(runningCheckQuery, params)
+          console.log('[Survey Period API] Running = true surveys (debug):', JSON.stringify(runningCheckResult.rows, null, 2))
+        }
+      }
+    }
 
     // Also find the next upcoming active survey
     const upcomingParams: (string | null)[] = []
     let upcomingParamIndex = 1
     let upcomingFilterClause = ""
     if (requestedType) {
-      upcomingFilterClause = ` AND survey_type = $${upcomingParamIndex++}`
+      upcomingFilterClause = ` AND ${actualSurveyTypeColumn} = $${upcomingParamIndex++}`
       upcomingParams.push(requestedType)
     }
 
-    const nextRunningFilter = hasRunning ? ' AND (running IS NULL OR running = true)' : ''
+    const nextRunningFilter = hasRunning ? ' AND (running IS NULL OR running IS TRUE)' : ''
     
     const nextRes = await query(
       `SELECT start_date

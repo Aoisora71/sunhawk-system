@@ -325,18 +325,27 @@ export function SystemManagementSection() {
 
   return (
     <Tabs defaultValue="status" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-2 h-auto">
-        <TabsTrigger value="status" className="text-xs sm:text-sm">
-          <Activity className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-          <span className="truncate">システム状態</span>
+      <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-2 p-1.5 sm:p-2 h-auto bg-muted/50 rounded-lg">
+        <TabsTrigger
+          value="status"
+          className="group relative flex flex-col items-center justify-center gap-1.5 sm:flex-row sm:gap-2 px-3 py-3 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 hover:bg-background/80 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground min-h-[56px] sm:min-h-[44px] touch-manipulation active:scale-[0.98]"
+        >
+          <Activity className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-muted-foreground group-data-[state=active]:text-primary transition-colors" />
+          <span className="leading-tight text-center whitespace-nowrap">システム状態</span>
         </TabsTrigger>
-        <TabsTrigger value="login-history" className="text-xs sm:text-sm">
-          <History className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-          <span className="truncate">ログイン履歴</span>
+        <TabsTrigger
+          value="login-history"
+          className="group relative flex flex-col items-center justify-center gap-1.5 sm:flex-row sm:gap-2 px-3 py-3 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 hover:bg-background/80 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground min-h-[56px] sm:min-h-[44px] touch-manipulation active:scale-[0.98]"
+        >
+          <History className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-muted-foreground group-data-[state=active]:text-primary transition-colors" />
+          <span className="leading-tight text-center whitespace-nowrap">ログイン履歴</span>
         </TabsTrigger>
-        <TabsTrigger value="backup" className="text-xs sm:text-sm">
-          <Database className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-          <span className="truncate">バックアップ</span>
+        <TabsTrigger
+          value="backup"
+          className="group relative flex flex-col items-center justify-center gap-1.5 sm:flex-row sm:gap-2 px-3 py-3 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 hover:bg-background/80 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground min-h-[56px] sm:min-h-[44px] touch-manipulation active:scale-[0.98]"
+        >
+          <Database className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-muted-foreground group-data-[state=active]:text-primary transition-colors" />
+          <span className="leading-tight text-center whitespace-nowrap">バックアップ</span>
         </TabsTrigger>
       </TabsList>
 

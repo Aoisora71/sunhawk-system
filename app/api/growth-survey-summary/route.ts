@@ -30,7 +30,8 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
         gss.updated_at,
         s.start_date,
         s.end_date,
-        s.name as survey_name
+        s.name as survey_name,
+        s.display
       FROM growth_survey_summary gss
       LEFT JOIN surveys s ON gss.gsid = s.id
       WHERE 1=1
@@ -49,6 +50,11 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     if (surveyId) {
       queryText += ` AND gsid = $${paramIndex++}`
       params.push(surveyId)
+    }
+
+    // Filter by display = true for organization view (to show all displayable surveys in radar chart)
+    if (forOrganization) {
+      queryText += ` AND (s.display = true OR s.display IS NULL)`
     }
 
     queryText += ` ORDER BY created_at DESC`

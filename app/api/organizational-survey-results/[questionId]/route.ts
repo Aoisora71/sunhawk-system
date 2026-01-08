@@ -24,7 +24,23 @@ async function handlePut(
 
     // Check if survey is active and within period
     const activeSurvey = await getActiveOrganizationalSurvey()
-    if (!activeSurvey || Number(activeSurvey.id) !== Number(surveyId)) {
+    
+    console.log('[Organizational Survey API] Active survey check:', {
+      activeSurvey: activeSurvey ? { id: activeSurvey.id, name: activeSurvey.name, status: activeSurvey.status } : null,
+      requestedSurveyId: surveyId,
+      userId: user.userId,
+    })
+    
+    if (!activeSurvey) {
+      console.log('[Organizational Survey API] No active survey found')
+      return badRequestResponse("現在、ソシキサーベイのサーベイ期間ではありません")
+    }
+    
+    if (Number(activeSurvey.id) !== Number(surveyId)) {
+      console.log('[Organizational Survey API] Survey ID mismatch:', {
+        activeSurveyId: activeSurvey.id,
+        requestedSurveyId: surveyId,
+      })
       return badRequestResponse("現在、ソシキサーベイのサーベイ期間ではありません")
     }
 

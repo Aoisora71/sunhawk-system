@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Mail, CheckCircle2, XCircle, AlertCircle, RefreshCw } from "lucide-react"
+import { Mail, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { toast } from "@/lib/toast"
 import api from "@/lib/api-client"
 import type { Survey } from "@/lib/types"
@@ -27,7 +27,9 @@ interface EmployeeStatus {
   name: string
   email: string
   departmentName: string
+  departmentCode: string | null
   jobName: string
+  jobCode: string | null
   responseRate: number
   status: "not_responded" | "responding" | "responded"
   respondedAt: string | null
@@ -47,6 +49,13 @@ export function SurveyResponseStatusSection() {
     respondedCount: 0,
     respondingCount: 0,
     notRespondedCount: 0,
+  })
+  const [sortConfig, setSortConfig] = useState<{
+    key: 'name' | 'departmentName' | 'jobName' | 'status' | 'responseRate'
+    direction: 'asc' | 'desc'
+  }>({
+    key: 'departmentName',
+    direction: 'asc',
   })
 
   useEffect(() => {
@@ -280,6 +289,109 @@ export function SurveyResponseStatusSection() {
   const nonResponders = employees.filter((emp) => emp.status === "not_responded")
   const selectedNonResponders = nonResponders.filter((emp) => selectedEmployeeIds.has(emp.id))
 
+  // Sort employees based on sortConfig
+  const sortedEmployees = useMemo(() => {
+    const { key, direction } = sortConfig
+
+    // If sorting by department, group by department and sort within each department by job code
+    if (key === 'departmentName') {
+      const groupedByDept = employees.reduce((acc, emp) => {
+        const deptKey = emp.departmentCode || emp.departmentName || '未分類'
+        if (!acc[deptKey]) {
+          acc[deptKey] = []
+        }
+        acc[deptKey].push(emp)
+        return acc
+      }, {} as Record<string, typeof employees>)
+
+      // Sort departments by code
+      const sortedDeptNames = Object.keys(groupedByDept).sort((a, b) => {
+        const deptA = groupedByDept[a][0]
+        const deptB = groupedByDept[b][0]
+        const codeA = deptA.departmentCode || deptA.departmentName || ''
+        const codeB = deptB.departmentCode || deptB.departmentName || ''
+        const compareResult = codeA.localeCompare(codeB, 'ja')
+        return direction === 'asc' ? compareResult : -compareResult
+      })
+
+      // Sort employees within each department by job code
+      const result: typeof employees = []
+      for (const deptName of sortedDeptNames) {
+        const deptEmployees = [...groupedByDept[deptName]].sort((a, b) => {
+          // First sort by job code
+          const jobCodeA = a.jobCode || a.jobName || ''
+          const jobCodeB = b.jobCode || b.jobName || ''
+          if (jobCodeA !== jobCodeB) {
+            return jobCodeA.localeCompare(jobCodeB, 'ja')
+          }
+          // If job codes are the same, sort by name
+          return (a.name || '').localeCompare(b.name || '')
+        })
+        result.push(...deptEmployees)
+      }
+      return result
+    }
+
+    // For other sort keys, apply normal sorting
+    const sorted = [...employees]
+    sorted.sort((a, b) => {
+      let aVal: any
+      let bVal: any
+
+      switch (key) {
+        case 'name':
+          aVal = a.name || ''
+          bVal = b.name || ''
+          break
+        case 'jobName':
+          // Sort by job code, fallback to job name
+          aVal = a.jobCode || a.jobName || ''
+          bVal = b.jobCode || b.jobName || ''
+          break
+        case 'status':
+          // Order: responded (0), responding (1), not_responded (2)
+          const statusOrder: Record<string, number> = { responded: 0, responding: 1, not_responded: 2 }
+          aVal = statusOrder[a.status] ?? 2
+          bVal = statusOrder[b.status] ?? 2
+          break
+        case 'responseRate':
+          aVal = typeof a.responseRate === 'number' ? a.responseRate : 0
+          bVal = typeof b.responseRate === 'number' ? b.responseRate : 0
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return direction === 'asc' 
+          ? aVal.localeCompare(bVal, 'ja')
+          : bVal.localeCompare(aVal, 'ja')
+      } else {
+        return direction === 'asc' 
+          ? (aVal as number) - (bVal as number)
+          : (bVal as number) - (aVal as number)
+      }
+    })
+
+    return sorted
+  }, [employees, sortConfig])
+
+  const handleSort = (key: typeof sortConfig.key) => {
+    setSortConfig((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  const getSortIcon = (key: typeof sortConfig.key) => {
+    if (sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-1 h-3 w-3" />
+    }
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="ml-1 h-3 w-3" />
+      : <ArrowDown className="ml-1 h-3 w-3" />
+  }
+
   const handleRefresh = async () => {
     await fetchSurveys()
     if (selectedSurveyId) {
@@ -501,18 +613,68 @@ export function SurveyResponseStatusSection() {
                           className="h-4 w-4 sm:h-5 sm:w-5"
                         />
                       </TableHead>
-                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">氏名</TableHead>
+                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 -ml-2"
+                          onClick={() => handleSort('name')}
+                        >
+                          氏名
+                          {getSortIcon('name')}
+                        </Button>
+                      </TableHead>
                       <TableHead className="text-xs sm:text-sm whitespace-nowrap min-w-[150px] sm:min-w-[200px]">
                         メールアドレス
                       </TableHead>
-                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">部門</TableHead>
-                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">職位</TableHead>
-                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">回答状況</TableHead>
-                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">回答率</TableHead>
+                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 -ml-2"
+                          onClick={() => handleSort('departmentName')}
+                        >
+                          部門
+                          {getSortIcon('departmentName')}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 -ml-2"
+                          onClick={() => handleSort('jobName')}
+                        >
+                          職位
+                          {getSortIcon('jobName')}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 -ml-2"
+                          onClick={() => handleSort('status')}
+                        >
+                          回答状況
+                          {getSortIcon('status')}
+                        </Button>
+                      </TableHead>
+                      <TableHead className="text-xs sm:text-sm whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 -ml-2"
+                          onClick={() => handleSort('responseRate')}
+                        >
+                          回答率
+                          {getSortIcon('responseRate')}
+                        </Button>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {employees.map((emp) => (
+                    {sortedEmployees.map((emp) => (
                       <TableRow key={emp.id}>
                         <TableCell>
                           {emp.status === "not_responded" && (

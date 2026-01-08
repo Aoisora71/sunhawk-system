@@ -147,6 +147,12 @@ export function SurveyPeriodSection() {
   }
 
   const handleToggleRunning = async (survey: Survey) => {
+    // Disable for completed and scheduled surveys
+    if (isSurveyPast(survey) || isSurveyUpcoming(survey)) {
+      toast.error("完了済みまたは予定済みのサーベイは実行/停止できません")
+      return
+    }
+
     try {
       const newRunning = !(survey.running ?? true)
       const response = await api.surveys.update(String(survey.id), {
@@ -213,6 +219,21 @@ export function SurveyPeriodSection() {
       month: "long",
       day: "numeric",
     })
+  }
+
+  // Helper function to format date for HTML date input (YYYY-MM-DD)
+  const formatDateForInput = (dateString: string | null | undefined): string => {
+    if (!dateString) return ""
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return ""
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      return `${year}-${month}-${day}`
+    } catch {
+      return ""
+    }
   }
 
   if (isLoading) {
@@ -408,8 +429,15 @@ export function SurveyPeriodSection() {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleToggleRunning(survey)}
+                      disabled={isSurveyPast(survey) || isSurveyUpcoming(survey)}
                       className="h-8 w-8 p-0"
-                      title={survey.running ?? true ? "停止" : "開始"}
+                      title={
+                        isSurveyPast(survey) || isSurveyUpcoming(survey)
+                          ? "完了済みまたは予定済みのサーベイは実行/停止できません"
+                          : survey.running ?? true
+                          ? "停止"
+                          : "開始"
+                      }
                     >
                       {survey.running ?? true ? (
                         <Pause className="h-4 w-4" />
@@ -512,7 +540,7 @@ export function SurveyPeriodSection() {
                       <Label className="text-sm sm:text-base">開始日 *</Label>
                       <Input
                         type="date"
-                        value={editingSurvey.startDate || ""}
+                        value={formatDateForInput(editingSurvey.startDate)}
                         onChange={(e) => setEditingSurvey({ ...editingSurvey, startDate: e.target.value })}
                         placeholder="年-月-日"
                         pattern="\d{4}-\d{2}-\d{2}"
@@ -523,7 +551,7 @@ export function SurveyPeriodSection() {
                       <Label className="text-sm sm:text-base">終了日 *</Label>
                       <Input
                         type="date"
-                        value={editingSurvey.endDate || ""}
+                        value={formatDateForInput(editingSurvey.endDate)}
                         onChange={(e) => setEditingSurvey({ ...editingSurvey, endDate: e.target.value })}
                         placeholder="年-月-日"
                         pattern="\d{4}-\d{2}-\d{2}"

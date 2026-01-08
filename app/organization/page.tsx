@@ -592,8 +592,8 @@ export default function OrganizationPage() {
       <DashboardHeader />
       <div className="flex flex-col md:flex-row">
         <DashboardNav />
-        <main className="flex-1 p-2 sm:p-3 md:p-8 w-full overflow-x-auto">
-          <div className="max-w-full mx-auto space-y-3 sm:space-y-4 md:space-y-6">
+        <main className="flex-1 p-3 sm:p-4 md:p-8 w-full overflow-x-hidden">
+          <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 md:space-y-8">
             <div>
               <h1 className="text-lg sm:text-xl md:text-3xl font-medium text-foreground mb-0.5 sm:mb-1">組織図</h1>
               <p className="text-xs sm:text-sm md:text-base text-muted-foreground">部署・職位で組織メンバーを分類</p>
@@ -665,18 +665,20 @@ export default function OrganizationPage() {
             </div>
 
             <Tabs value={activeView} onValueChange={setActiveView} className="space-y-3 sm:space-y-4">
-              <TabsList className="grid w-full grid-cols-2 text-xs sm:text-sm">
+              <TabsList className="grid w-full grid-cols-2 gap-2 p-1.5 sm:p-2 h-auto bg-muted/50 rounded-lg">
                 <TabsTrigger
                   value="by-department"
-                  className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1.5 text-center sm:text-left"
+                  className="group relative flex flex-col items-center justify-center gap-1.5 sm:flex-row sm:gap-2 px-3 py-3 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 hover:bg-background/80 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground min-h-[56px] sm:min-h-[44px] touch-manipulation active:scale-[0.98]"
                 >
-                  部門別
+                  <Building2 className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-muted-foreground group-data-[state=active]:text-primary transition-colors" />
+                  <span className="leading-tight text-center whitespace-nowrap">部門別</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="by-position"
-                  className="flex flex-col items-center gap-0.5 sm:flex-row sm:gap-1.5 text-center sm:text-left"
+                  className="group relative flex flex-col items-center justify-center gap-1.5 sm:flex-row sm:gap-2 px-3 py-3 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-medium rounded-md transition-all duration-200 hover:bg-background/80 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground min-h-[56px] sm:min-h-[44px] touch-manipulation active:scale-[0.98]"
                 >
-                  職位別
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 text-muted-foreground group-data-[state=active]:text-primary transition-colors" />
+                  <span className="leading-tight text-center whitespace-nowrap">職位別</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -692,10 +694,10 @@ export default function OrganizationPage() {
                   <CardContent className="p-2 sm:p-3 md:p-6 overflow-x-auto">
                     <div className="min-w-max md:min-w-full pb-2 sm:pb-3 md:pb-4">
                       <div className="space-y-2 sm:space-y-3 md:space-y-6">
-                        {departmentTree.map((branch, index) =>
+                          {departmentTree.map((branch, index) =>
                           renderBranch(branch, 0, index === departmentTree.length - 1),
-                        )}
-                      </div>
+                          )}
+                        </div>
                     </div>
                   </CardContent>
                 </Card>
