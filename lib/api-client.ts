@@ -421,9 +421,10 @@ export const growthSurveyApi = {
 }
 
 export const growthSurveyResultsApi = {
-  getFreeTextResponses: async (userId?: string) => {
+  getFreeTextResponses: async (userId?: string, surveyId?: string) => {
     const params = new URLSearchParams()
     if (userId) params.append("userId", userId)
+    if (surveyId) params.append("surveyId", surveyId)
     const queryString = params.toString()
     return apiFetch<{
       success: boolean
