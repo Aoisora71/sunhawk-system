@@ -62,7 +62,9 @@ export default function AdminPage() {
   const [loggedInUser, setLoggedInUser] = useState<string>("")
   const [employeeCount, setEmployeeCount] = useState<number>(0)
   const [surveys, setSurveys] = useState<Survey[]>([])
-  const [activeSurveys, setActiveSurveys] = useState<number>(0)
+  const [totalSurveys, setTotalSurveys] = useState<number>(0)
+  const [organizationalSurveys, setOrganizationalSurveys] = useState<number>(0)
+  const [growthSurveys, setGrowthSurveys] = useState<number>(0)
   const [surveyResponseRate, setSurveyResponseRate] = useState<number>(0)
   const [allEmployees, setAllEmployees] = useState<User[]>([])
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null)
@@ -200,16 +202,14 @@ export default function AdminPage() {
       const surveysData = await loadSurveys()
       setSurveys(surveysData)
       
-      // Calculate active surveys using the same logic as SurveyResponseStatusSection
-      // Count surveys with status "active" (current date is between start and end date)
-      const surveysWithStatus = surveysData.map((survey: any) => {
-        const status = calculateSurveyStatus(survey)
-        return { ...survey, actualStatus: status.status }
-      })
+      // Calculate total surveys and counts by type
+      const totalCount = surveysData.length
+      const organizationalCount = surveysData.filter((survey: Survey) => survey.surveyType === 'organizational').length
+      const growthCount = surveysData.filter((survey: Survey) => survey.surveyType === 'growth').length
       
-      const activeCount = surveysWithStatus.filter((survey: any) => survey.actualStatus === "active").length
-      
-            setActiveSurveys(activeCount)
+      setTotalSurveys(totalCount)
+      setOrganizationalSurveys(organizationalCount)
+      setGrowthSurveys(growthCount)
     } catch (e) {
           }
   }
@@ -353,14 +353,26 @@ export default function AdminPage() {
                 <CardHeader className="pb-2 sm:pb-3">
                   <CardDescription className="text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">
                     <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                    実施中のサーベイ数
+                    全体アンケート調査数
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl sm:text-2xl md:text-3xl font-medium text-foreground">
-                      {activeSurveys}件
-                    </span>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl sm:text-2xl md:text-3xl font-medium text-foreground">
+                        {totalSurveys}件
+                      </span>
+                    </div>
+                    <div className="flex flex-row flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                        <span>ソシキサーベイ: {organizationalSurveys}件</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                        <span>グロースサーベイ: {growthSurveys}件</span>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

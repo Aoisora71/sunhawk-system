@@ -155,6 +155,7 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
         const userEntry = resultArray.find((entry) => entry.uid === target.userId)
 
         if (userEntry) {
+          // Count all answered questions, including skipped ones (s: null)
           progressCount++
           
           if (isFreeTextQuestion) {
@@ -173,8 +174,9 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
               savedAt: new Date().toISOString(), // Approximate, could be improved
             })
           } else {
-            // For single choice questions, reconstruct answer text from score and question options
+            // For single choice questions, handle both answered and skipped questions
             if (userEntry.s !== null) {
+              // Normal answer with score
               let answerText = ""
               const options = getGrowthSurveyOptions(question)
               const matchedOption = options.find((option) => option.score === userEntry.s)
@@ -186,6 +188,17 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
                 category: question.category ?? "",
                 answer: answerText,
                 score: userEntry.s,
+                answerType: question.answerType,
+                savedAt: new Date().toISOString(), // Approximate, could be improved
+              })
+            } else {
+              // Skipped question (s: null) - still count as answered for progress
+              responses.push({
+                questionId: question.id,
+                questionText: question.questionText,
+                category: question.category ?? "",
+                answer: "スキップ",
+                score: null,
                 answerType: question.answerType,
                 savedAt: new Date().toISOString(), // Approximate, could be improved
               })

@@ -41,7 +41,8 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
         oss.updated_at,
         s.start_date,
         s.end_date,
-        s.name as survey_name
+        s.name as survey_name,
+        s.display
       FROM organizational_survey_summary oss
       LEFT JOIN surveys s ON oss.osid = s.id
       WHERE 1=1
@@ -60,6 +61,11 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     if (surveyId) {
       queryText += ` AND osid = $${paramIndex++}`
       params.push(surveyId)
+    }
+
+    // Filter by display = true for organization view (to show all displayable surveys in radar chart)
+    if (forOrganization) {
+      queryText += ` AND (s.display = true OR s.display IS NULL)`
     }
 
     queryText += ` ORDER BY created_at DESC`
@@ -82,9 +88,10 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
       start_date: string | null
       end_date: string | null
       survey_name: string | null
+      display: boolean | null
     }>(queryText, params)
 
-    const summaries: (OrganizationalSurveySummary & { startDate?: string | null; endDate?: string | null; surveyName?: string | null })[] = result.rows.map((row) => ({
+    const summaries: (OrganizationalSurveySummary & { startDate?: string | null; endDate?: string | null; surveyName?: string | null; display?: boolean | null })[] = result.rows.map((row) => ({
       id: row.id,
       userId: row.uid,
       surveyId: row.osid,
@@ -102,6 +109,7 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
       startDate: row.start_date,
       endDate: row.end_date,
       surveyName: row.survey_name,
+      display: row.display !== undefined ? Boolean(row.display) : null,
     }))
 
     // Cache results - longer TTL for organization view (less frequently updated)

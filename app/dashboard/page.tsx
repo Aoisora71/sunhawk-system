@@ -503,8 +503,15 @@ export default function DashboardPage() {
   const [latestSurveyId, setLatestSurveyId] = useState<string | null>(null)
   const [orgScoreLoading, setOrgScoreLoading] = useState<boolean>(true)
   const [radarData, setRadarData] = useState<
-    { category: string; current: number | null; previous: number | null; fullMark: number }[]
+    Array<{ category: string; fullMark: number; [key: string]: string | number | null }>
   >([])
+  const [radarSurveys, setRadarSurveys] = useState<Array<{
+    surveyId: number
+    surveyName: string
+    participantCount: number
+    dataKey: string
+    color: string
+  }>>([])
   const [radarLoading, setRadarLoading] = useState<boolean>(true)
   const [radarCurrentParticipantCount, setRadarCurrentParticipantCount] = useState<number>(0)
   const [radarPreviousParticipantCount, setRadarPreviousParticipantCount] = useState<number>(0)
@@ -1003,8 +1010,15 @@ export default function DashboardPage() {
     })
   }
   const [organizationGrowthData, setOrganizationGrowthData] = useState<
-    { category: string; current: number | null; previous: number | null; fullMark: number }[]
+    Array<{ category: string; fullMark: number; [key: string]: string | number | null }>
   >([])
+  const [organizationGrowthSurveys, setOrganizationGrowthSurveys] = useState<Array<{
+    surveyId: number
+    surveyName: string
+    participantCount: number
+    dataKey: string
+    color: string
+  }>>([])
   const [organizationGrowthLoading, setOrganizationGrowthLoading] = useState<boolean>(true)
   const [growthCurrentParticipantCount, setGrowthCurrentParticipantCount] = useState<number>(0)
   const [growthPreviousParticipantCount, setGrowthPreviousParticipantCount] = useState<number>(0)
@@ -1025,8 +1039,15 @@ export default function DashboardPage() {
   const [employees, setEmployees] = useState<User[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [departmentChartData, setDepartmentChartData] = useState<
-    { name: string; current: number | null; previous: number | null }[]
+    Array<{ name: string; codeNum: number | null; [key: string]: string | number | null }>
   >([])
+  const [departmentChartSurveys, setDepartmentChartSurveys] = useState<Array<{
+    surveyId: number
+    surveyName: string
+    participantCount: number
+    dataKey: string
+    color: string
+  }>>([])
   const [historicalData, setHistoricalData] = useState<{ month: string; score: number }[]>([])
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [highestScoreDepartment, setHighestScoreDepartment] = useState<{ name: string; score: number } | null>(null)
@@ -1408,8 +1429,8 @@ export default function DashboardPage() {
           return bEnd - aEnd
         })
 
-        const currentSurvey = sortedSurveys[0]
-        const previousSurvey = sortedSurveys.length > 1 ? sortedSurveys[1] : null
+        // Get all display = true surveys (all surveys from the API are already filtered)
+        const displaySurveys = sortedSurveys // All surveys returned are display = true
 
         const computeCategoryAverages = (rows: any[]) => {
           const count = rows.length || 1
@@ -1447,10 +1468,18 @@ export default function DashboardPage() {
           }
         }
 
-        const currentAverages = currentSurvey ? computeCategoryAverages(currentSurvey[1].summaries) : null
-        const previousAverages = previousSurvey ? computeCategoryAverages(previousSurvey[1].summaries) : null
+        // Calculate averages for all display surveys
+        const surveyAverages = displaySurveys.map((survey) => ({
+          surveyId: survey[0],
+          surveyName: survey[1].summaries[0]?.surveyName || `サーベイ ${survey[0]}`,
+          endDate: survey[1].endDate,
+          participantCount: survey[1].summaries.length,
+          averages: computeCategoryAverages(survey[1].summaries),
+        }))
 
-        // Store participant counts and survey IDs for radar chart
+        // Store participant counts and survey IDs for radar chart (keep first two for backward compatibility)
+        const currentSurvey = displaySurveys[0]
+        const previousSurvey = displaySurveys.length > 1 ? displaySurveys[1] : null
         setRadarCurrentParticipantCount(currentSurvey ? currentSurvey[1].summaries.length : 0)
         setRadarPreviousParticipantCount(previousSurvey ? previousSurvey[1].summaries.length : 0)
         setRadarCurrentSurveyId(currentSurvey ? String(currentSurvey[0]) : null)
@@ -1467,18 +1496,54 @@ export default function DashboardPage() {
           { id: 8, label: "免責意識" },
         ]
 
+        // Define colors for each survey (use different shades for better visibility)
+        const colors = [
+          "oklch(0.45 0.15 264)", // Current survey - darker blue
+          "oklch(0.65 0.12 264)", // Previous survey - lighter blue
+          "oklch(0.55 0.15 200)", // Third survey - purple
+          "oklch(0.50 0.15 150)", // Fourth survey - green-blue
+          "oklch(0.60 0.15 100)", // Fifth survey - green
+          "oklch(0.50 0.15 50)",  // Sixth survey - yellow-green
+          "oklch(0.55 0.15 30)",  // Seventh survey - orange
+          "oklch(0.50 0.15 0)",   // Eighth survey - red
+        ]
 
-
-        const data = categories.map((cat) => ({
-          category: cat.label,
-          current: currentAverages ? Number((currentAverages[cat.id as 1] ?? 0).toFixed(1)) : null,
-          previous: previousAverages ? Number((previousAverages[cat.id as 1] ?? 0).toFixed(1)) : null,
-          fullMark: 100,
+        // Build survey metadata for radar chart
+        const surveysMetadata = surveyAverages.map((survey, index) => ({
+          surveyId: survey.surveyId,
+          surveyName: survey.surveyName,
+          participantCount: survey.participantCount,
+          dataKey: index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey.surveyId}`,
+          color: colors[index % colors.length],
         }))
+
+        setRadarSurveys(surveysMetadata)
+
+        // Build data structure with all display surveys
+        const data = categories.map((cat) => {
+          const result: any = {
+            category: cat.label,
+            fullMark: 100,
+          }
+          
+          // Add data for each display survey
+          surveyAverages.forEach((survey, index) => {
+            const key = index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey.surveyId}`
+            result[key] = Number((survey.averages[cat.id as 1] ?? 0).toFixed(1))
+          })
+          
+          return result
+        })
 
         setRadarData(data)
 
         // ---- Historical overall scores per survey (by survey start month) ----
+        // Filter summaries to only include display = true surveys
+        const displaySummaries = summaries.filter((row: any) => {
+          // Include if display is true or null (for backward compatibility)
+          return row.display === true || row.display === null || row.display === undefined
+        })
+
         type SurveyBucket = {
           startDate: string | null
           endDate: string | null
@@ -1488,7 +1553,7 @@ export default function DashboardPage() {
 
         const surveyBuckets = new Map<number, SurveyBucket>()
 
-        summaries.forEach((row: any) => {
+        displaySummaries.forEach((row: any) => {
           const sid = Number(row.surveyId)
           if (!Number.isFinite(sid)) return
           const start = row.startDate || row.start_date || null
@@ -1633,58 +1698,97 @@ export default function DashboardPage() {
           return result
         }
 
-        const currentDeptAvg =
-          currentSurvey && currentSurvey[1].summaries.length > 0
-            ? computeDepartmentAverages(currentSurvey[1].summaries)
-            : new Map<string, { avg: number; codeNum: number | null }>()
+        // Calculate department averages for all display surveys
+        const surveyDeptAverages = new Map<number, Map<string, { avg: number; codeNum: number | null }>>()
+        const surveyParticipantCounts = new Map<number, number>()
+        
+        for (const survey of displaySurveys) {
+          const surveyId = survey[0]
+          const summaries = survey[1].summaries
+          
+          if (summaries.length > 0) {
+            const deptAvg = computeDepartmentAverages(summaries)
+            surveyDeptAverages.set(surveyId, deptAvg)
+            surveyParticipantCounts.set(surveyId, summaries.length)
+          } else {
+            surveyParticipantCounts.set(surveyId, 0)
+          }
+        }
 
-        const previousDeptAvg =
-          previousSurvey && previousSurvey[1].summaries.length > 0
-            ? computeDepartmentAverages(previousSurvey[1].summaries)
-            : new Map<string, { avg: number; codeNum: number | null }>()
+        // Store participant counts for backward compatibility (first two surveys)
+        const deptCurrentSurvey = displaySurveys[0]
+        const deptPreviousSurvey = displaySurveys.length > 1 ? displaySurveys[1] : null
+        setRadarCurrentParticipantCount(deptCurrentSurvey ? (surveyParticipantCounts.get(deptCurrentSurvey[0]) || 0) : 0)
+        setRadarPreviousParticipantCount(deptPreviousSurvey ? (surveyParticipantCounts.get(deptPreviousSurvey[0]) || 0) : 0)
 
-        // Collect union of department names
+        // Define colors for each survey (use different shades for better visibility)
+        const deptColors = [
+          "oklch(0.45 0.15 264)", // Current survey - darker blue
+          "oklch(0.65 0.12 264)", // Previous survey - lighter blue
+          "oklch(0.55 0.15 200)", // Third survey - purple
+          "oklch(0.50 0.15 150)", // Fourth survey - green-blue
+          "oklch(0.60 0.15 100)", // Fifth survey - green
+          "oklch(0.50 0.15 50)",  // Sixth survey - yellow-green
+          "oklch(0.55 0.15 30)",  // Seventh survey - orange
+          "oklch(0.50 0.15 0)",   // Eighth survey - red
+        ]
+
+        // Build survey metadata for department chart
+        const deptSurveysMetadata = displaySurveys.map((survey, index) => ({
+          surveyId: survey[0],
+          surveyName: survey[1].summaries[0]?.surveyName || `サーベイ ${survey[0]}`,
+          participantCount: surveyParticipantCounts.get(survey[0]) || 0,
+          dataKey: index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey[0]}`,
+          color: deptColors[index % deptColors.length],
+        }))
+
+        setDepartmentChartSurveys(deptSurveysMetadata)
+
+        // Collect union of department names from all surveys
         const allDept = new Map<
           string,
           {
             codeNum: number | null
-            current: number | null
-            previous: number | null
+            [key: string]: string | number | null
           }
         >()
 
-        currentDeptAvg.forEach((v, name) => {
-          allDept.set(name, {
-            codeNum: v.codeNum,
-            current: v.avg,
-            previous: null,
-          })
-        })
-
-        previousDeptAvg.forEach((v, name) => {
-          if (!allDept.has(name)) {
-            allDept.set(name, {
-              codeNum: v.codeNum,
-              current: null,
-              previous: v.avg,
-            })
-          } else {
-            const existing = allDept.get(name)!
-            allDept.set(name, {
-              codeNum: existing.codeNum ?? v.codeNum,
-              current: existing.current,
-              previous: v.avg,
+        // Add data from all surveys
+        displaySurveys.forEach((survey, index) => {
+          const surveyId = survey[0]
+          const deptAvg = surveyDeptAverages.get(surveyId)
+          const key = index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${surveyId}`
+          
+          if (deptAvg) {
+            deptAvg.forEach((v, name) => {
+              if (!allDept.has(name)) {
+                allDept.set(name, {
+                  codeNum: v.codeNum,
+                  [key]: v.avg,
+                })
+              } else {
+                const existing = allDept.get(name)!
+                allDept.set(name, {
+                  ...existing,
+                  codeNum: existing.codeNum ?? v.codeNum,
+                  [key]: v.avg,
+                })
+              }
             })
           }
         })
 
-        const deptData: { name: string; current: number | null; previous: number | null; codeNum: number | null }[] = []
+        const deptData: Array<{ name: string; codeNum: number | null; [key: string]: string | number | null }> = []
         allDept.forEach((v, name) => {
           deptData.push({
             name,
-            current: v.current,
-            previous: v.previous,
             codeNum: v.codeNum,
+            ...Object.fromEntries(
+              displaySurveys.map((survey, index) => {
+                const key = index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey[0]}`
+                return [key, v[key] ?? null]
+              })
+            ),
           })
         })
 
@@ -1696,13 +1800,7 @@ export default function DashboardPage() {
           return a.name.localeCompare(b.name)
         })
 
-        setDepartmentChartData(
-          deptData.map((d) => ({
-            name: d.name,
-            current: d.current,
-            previous: d.previous,
-          })),
-        )
+        setDepartmentChartData(deptData)
       } catch (error) {
         console.error("Failed to load radar data:", error)
         setRadarData([])
@@ -1749,9 +1847,11 @@ export default function DashboardPage() {
           console.warn(`[Growth Survey Chart] Failed to fetch surveys with data, using all growth surveys:`, error)
         }
 
-        // Filter for growth surveys
+        // Filter for growth surveys with display = true
         // If we have surveys with data, only include those. Otherwise, include all growth surveys.
-        const allGrowthSurveys = surveysRes.surveys.filter((s: any) => s.surveyType === 'growth')
+        const allGrowthSurveys = surveysRes.surveys.filter((s: any) => 
+          s.surveyType === 'growth' && (s.display === true || s.display === null)
+        )
         const growthSurveys = surveysWithData.length > 0
           ? allGrowthSurveys.filter((s: any) => surveysWithData.includes(Number(s.id)))
           : allGrowthSurveys
@@ -1783,39 +1883,13 @@ export default function DashboardPage() {
           "識学サーベイ": 1.5, // This is calculated from organizational survey, not from growth survey
         }
 
-        // Find current survey (most recent with data, or most recent overall if no data)
-        const currentSurvey = growthSurveys.length > 0 ? growthSurveys[0] : null
-        
-        // Find previous survey: the one before currentSurvey in the sorted list
-        // This ensures we get the actual previous survey based on gsid in growth_survey_responses
-        let previousSurvey = null
-        if (growthSurveys.length > 1) {
-          // Find the index of current survey in the sorted list
-          const currentIndex = currentSurvey 
-            ? growthSurveys.findIndex((s: any) => Number(s.id) === Number(currentSurvey.id))
-            : -1
-          
-          // Previous survey is the one at index + 1 (since list is sorted descending)
-          if (currentIndex >= 0 && currentIndex + 1 < growthSurveys.length) {
-            previousSurvey = growthSurveys[currentIndex + 1]
-          } else if (currentIndex === -1 && growthSurveys.length > 0) {
-            // If current survey not found in list, previous is the first one
-            previousSurvey = growthSurveys[0]
-          }
-        }
+        // Get all display = true surveys (already filtered above)
+        const displaySurveys = growthSurveys
 
         // Debug logging
-        console.log(`[Growth Survey Chart] Total growth surveys with data: ${growthSurveys.length}`)
-        if (currentSurvey) {
-          console.log(`[Growth Survey Chart] Current survey ID: ${currentSurvey.id}, Name: ${currentSurvey.name}, EndDate: ${currentSurvey.endDate}`)
-        }
-        if (previousSurvey) {
-          console.log(`[Growth Survey Chart] Previous survey ID: ${previousSurvey.id}, Name: ${previousSurvey.name}, EndDate: ${previousSurvey.endDate}`)
-        } else {
-          console.log(`[Growth Survey Chart] No previous survey found`)
-        }
+        console.log(`[Growth Survey Chart] Total display = true growth surveys: ${displaySurveys.length}`)
 
-        // Get category scores for current and previous surveys
+        // Get category scores for all display surveys
         const getCategoryScores = async (surveyId: number) => {
           try {
             const response = await api.growthSurveyCategoryScores.get(surveyId)
@@ -1838,27 +1912,63 @@ export default function DashboardPage() {
           }
         }
 
-        // Get category scores for current and previous surveys
-        let currentCategories = null
-        let previousCategories = null
-
-        if (currentSurvey) {
-          const currentSurveyId = Number(currentSurvey.id)
-          console.log(`[Growth Survey Chart] Fetching current survey scores for ID: ${currentSurveyId}`)
-          currentCategories = await getCategoryScores(currentSurveyId)
-          if (currentCategories) {
-            console.log(`[Growth Survey Chart] Current categories:`, currentCategories)
+        // Get category scores for all display surveys
+        const surveyCategoriesMap = new Map<number, any>()
+        for (const survey of displaySurveys) {
+          const surveyId = Number(survey.id)
+          console.log(`[Growth Survey Chart] Fetching scores for survey ID: ${surveyId}, Name: ${survey.name}`)
+          const categories = await getCategoryScores(surveyId)
+          if (categories) {
+            surveyCategoriesMap.set(surveyId, categories)
+            console.log(`[Growth Survey Chart] Survey ${surveyId} categories:`, categories)
           }
         }
 
-        if (previousSurvey) {
-          const previousSurveyId = Number(previousSurvey.id)
-          console.log(`[Growth Survey Chart] Fetching previous survey scores for ID: ${previousSurveyId}`)
-          previousCategories = await getCategoryScores(previousSurveyId)
-          if (previousCategories) {
-            console.log(`[Growth Survey Chart] Previous categories:`, previousCategories)
+        // Get participant counts for all display surveys
+        const surveyParticipantCounts = new Map<number, number>()
+        for (const survey of displaySurveys) {
+          try {
+            const surveyId = Number(survey.id)
+            const summaryRes = await api.growthSurveySummary.list(String(surveyId), true)
+            if (summaryRes?.success && Array.isArray(summaryRes.summaries)) {
+              surveyParticipantCounts.set(surveyId, summaryRes.summaries.length)
+            } else {
+              surveyParticipantCounts.set(surveyId, 0)
+            }
+          } catch (error) {
+            console.error(`Failed to load participant count for survey ${survey.id}:`, error)
+            surveyParticipantCounts.set(Number(survey.id), 0)
           }
         }
+
+        // Store participant counts for backward compatibility (first two surveys)
+        const currentSurvey = displaySurveys[0]
+        const previousSurvey = displaySurveys.length > 1 ? displaySurveys[1] : null
+        setGrowthCurrentParticipantCount(currentSurvey ? (surveyParticipantCounts.get(Number(currentSurvey.id)) || 0) : 0)
+        setGrowthPreviousParticipantCount(previousSurvey ? (surveyParticipantCounts.get(Number(previousSurvey.id)) || 0) : 0)
+
+        // Define colors for each survey (use different shades for better visibility)
+        const colors = [
+          "oklch(0.45 0.15 264)", // Current survey - darker blue
+          "oklch(0.65 0.12 264)", // Previous survey - lighter blue
+          "oklch(0.55 0.15 200)", // Third survey - purple
+          "oklch(0.50 0.15 150)", // Fourth survey - green-blue
+          "oklch(0.60 0.15 100)", // Fifth survey - green
+          "oklch(0.50 0.15 50)",  // Sixth survey - yellow-green
+          "oklch(0.55 0.15 30)",  // Seventh survey - orange
+          "oklch(0.50 0.15 0)",   // Eighth survey - red
+        ]
+
+        // Build survey metadata for radar chart
+        const surveysMetadata = displaySurveys.map((survey, index) => ({
+          surveyId: Number(survey.id),
+          surveyName: survey.name || `サーベイ ${survey.id}`,
+          participantCount: surveyParticipantCounts.get(Number(survey.id)) || 0,
+          dataKey: index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey.id}`,
+          color: colors[index % colors.length],
+        }))
+
+        setOrganizationGrowthSurveys(surveysMetadata)
 
         const categories = [
           { name: "ルール" },
@@ -1868,47 +1978,29 @@ export default function DashboardPage() {
           { name: "識学サーベイ" },
         ]
 
-        // Use retrieved categories or fallback to bonus points only
-        const data = categories.map((cat) => ({
-          category: cat.name,
-          current: currentCategories 
-            ? Number(((currentCategories as any)[cat.name] || fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0).toFixed(2))
-            : fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0,
-          previous: previousCategories 
-            ? Number(((previousCategories as any)[cat.name] || fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0).toFixed(2))
-            : null,
-          fullMark: 6, // Maximum score is 6
-        }))
+        // Build data structure with all display surveys
+        const data = categories.map((cat) => {
+          const result: any = {
+            category: cat.name,
+            fullMark: 6, // Maximum score is 6
+          }
+          
+          // Add data for each display survey
+          displaySurveys.forEach((survey, index) => {
+            const surveyId = Number(survey.id)
+            const categories = surveyCategoriesMap.get(surveyId)
+            const key = index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey.id}`
+            const score = categories 
+              ? Number(((categories as any)[cat.name] || fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0).toFixed(2))
+              : fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0
+            result[key] = score
+          })
+          
+          return result
+        })
 
         // Always set data (even if only bonus points are available)
         setOrganizationGrowthData(data)
-
-        // Get participant counts for current and previous growth surveys
-        try {
-          if (currentSurvey) {
-            const currentSurveyId = Number(currentSurvey.id)
-            const currentSummaryRes = await api.growthSurveySummary.list(String(currentSurveyId), true)
-            if (currentSummaryRes?.success && Array.isArray(currentSummaryRes.summaries)) {
-              setGrowthCurrentParticipantCount(currentSummaryRes.summaries.length)
-            }
-          } else {
-            setGrowthCurrentParticipantCount(0)
-          }
-
-          if (previousSurvey) {
-            const previousSurveyId = Number(previousSurvey.id)
-            const previousSummaryRes = await api.growthSurveySummary.list(String(previousSurveyId), true)
-            if (previousSummaryRes?.success && Array.isArray(previousSummaryRes.summaries)) {
-              setGrowthPreviousParticipantCount(previousSummaryRes.summaries.length)
-            }
-          } else {
-            setGrowthPreviousParticipantCount(0)
-          }
-        } catch (error) {
-          console.error("Failed to load growth survey participant counts:", error)
-          setGrowthCurrentParticipantCount(0)
-          setGrowthPreviousParticipantCount(0)
-        }
       } catch (error) {
         console.error("Failed to load organization growth data:", error)
         // On error, show zero scores (no bonus points)
@@ -1997,9 +2089,10 @@ export default function DashboardPage() {
     // Find department with highest current score
     let highest: { name: string; score: number } | null = null
     for (const dept of departmentChartData) {
-      if (dept.current !== null && dept.current !== undefined) {
-        if (highest === null || dept.current > highest.score) {
-          highest = { name: dept.name, score: dept.current }
+      const currentScore = dept.current
+      if (currentScore !== null && currentScore !== undefined && typeof currentScore === 'number') {
+        if (highest === null || currentScore > highest.score) {
+          highest = { name: dept.name, score: currentScore }
         }
       }
     }
@@ -2017,9 +2110,10 @@ export default function DashboardPage() {
     // Find category with lowest current score
     let lowest: { name: string; score: number } | null = null
     for (const cat of radarData) {
-      if (cat.current !== null && cat.current !== undefined) {
-        if (lowest === null || cat.current < lowest.score) {
-          lowest = { name: cat.category, score: cat.current }
+      const currentScore = cat.current
+      if (currentScore !== null && currentScore !== undefined && typeof currentScore === 'number') {
+        if (lowest === null || currentScore < lowest.score) {
+          lowest = { name: cat.category, score: currentScore }
         }
       }
     }
@@ -2203,16 +2297,13 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-2 sm:p-3 md:p-6">
                   <ChartContainer
-                    config={{
-                      current: {
-                        label: `現在サーベイ${radarCurrentParticipantCount > 0 ? `（${radarCurrentParticipantCount}）` : ""}`,
-                        color: "oklch(0.45 0.15 264)",
-                      },
-                      previous: {
-                        label: `前回サーベイ${radarPreviousParticipantCount > 0 ? `（${radarPreviousParticipantCount}）` : ""}`,
-                        color: "oklch(0.65 0.12 264)",
-                      },
-                    }}
+                    config={radarSurveys.reduce((acc, survey) => {
+                      acc[survey.dataKey] = {
+                        label: `${survey.surveyName}${survey.participantCount > 0 ? `（${survey.participantCount}）` : ""}`,
+                        color: survey.color,
+                      }
+                      return acc
+                    }, {} as Record<string, { label: string; color: string }>)}
                     className="h-[200px] sm:h-[250px] md:h-[300px] w-full"
                   >
                     <ResponsiveContainer width="100%" height="100%">
@@ -2227,20 +2318,16 @@ export default function DashboardPage() {
                           domain={[0, 100]}
                           tick={{ fill: "oklch(0.55 0.01 264)", fontSize: isMobile ? 8 : 10 }}
                         />
-                        <Radar
-                          name={`現在サーベイ${radarCurrentParticipantCount > 0 ? `（${radarCurrentParticipantCount}）` : ""}`}
-                          dataKey="current"
-                          stroke="oklch(0.45 0.15 264)"
-                          fill="oklch(0.45 0.15 264)"
-                          fillOpacity={0.3}
-                        />
-                        <Radar
-                          name={`前回サーベイ${radarPreviousParticipantCount > 0 ? `（${radarPreviousParticipantCount}）` : ""}`}
-                          dataKey="previous"
-                          stroke="oklch(0.65 0.12 264)"
-                          fill="oklch(0.65 0.12 264)"
-                          fillOpacity={0.1}
-                        />
+                        {radarSurveys.map((survey, index) => (
+                          <Radar
+                            key={survey.surveyId}
+                            name={`${survey.surveyName}${survey.participantCount > 0 ? `（${survey.participantCount}）` : ""}`}
+                            dataKey={survey.dataKey}
+                            stroke={survey.color}
+                            fill={survey.color}
+                            fillOpacity={index === 0 ? 0.3 : index === 1 ? 0.1 : 0.15}
+                          />
+                        ))}
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "oklch(0.98 0.002 264)",
@@ -2317,16 +2404,13 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="p-2 sm:p-3 md:p-6">
                   <ChartContainer
-                    config={{
-                      current: {
-                        label: `現在サーベイ${radarCurrentParticipantCount > 0 ? `（${radarCurrentParticipantCount}）` : ""}`,
-                        color: "oklch(0.45 0.15 264)",
-                      },
-                      previous: {
-                        label: `前回サーベイ${radarPreviousParticipantCount > 0 ? `（${radarPreviousParticipantCount}）` : ""}`,
-                        color: "oklch(0.65 0.12 264)",
-                      },
-                    }}
+                    config={departmentChartSurveys.reduce((acc, survey) => {
+                      acc[survey.dataKey] = {
+                        label: `${survey.surveyName}${survey.participantCount > 0 ? `（${survey.participantCount}）` : ""}`,
+                        color: survey.color,
+                      }
+                      return acc
+                    }, {} as Record<string, { label: string; color: string }>)}
                     className="h-[200px] sm:h-[250px] md:h-[300px] w-full"
                   >
                     <ResponsiveContainer width="100%" height="100%">
@@ -2345,21 +2429,17 @@ export default function DashboardPage() {
                           width={isMobile ? 30 : 40}
                         />
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        {/* 並んだ棒グラフ（前回：薄い色、現在：濃い色） */}
-                        <Bar
-                          dataKey="previous"
-                          name={`前回サーベイ${radarPreviousParticipantCount > 0 ? `（${radarPreviousParticipantCount}）` : ""}`}
-                          fill="oklch(0.75 0.12 264)"
-                          radius={[4, 4, 0, 0]}
-                          barSize={14}
-                        />
-                        <Bar
-                          dataKey="current"
-                          name={`現在サーベイ${radarCurrentParticipantCount > 0 ? `（${radarCurrentParticipantCount}）` : ""}`}
-                          fill="oklch(0.45 0.15 264)"
-                          radius={[4, 4, 0, 0]}
-                          barSize={14}
-                        />
+                        {/* Display all display = true surveys as grouped bars */}
+                        {departmentChartSurveys.map((survey, index) => (
+                          <Bar
+                            key={survey.surveyId}
+                            dataKey={survey.dataKey}
+                            name={`${survey.surveyName}${survey.participantCount > 0 ? `（${survey.participantCount}）` : ""}`}
+                            fill={survey.color}
+                            radius={[4, 4, 0, 0]}
+                            barSize={Math.max(10, 14 - (departmentChartSurveys.length - 2) * 1.5)}
+                          />
+                        ))}
                       </BarChart>
                     </ResponsiveContainer>
                   </ChartContainer>
@@ -2428,16 +2508,13 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <ChartContainer
-                    config={{
-                      current: {
-                        label: `現在サーベイ${growthCurrentParticipantCount > 0 ? `（${growthCurrentParticipantCount}）` : ""}`,
-                        color: "oklch(0.50 0.20 240)",
-                      },
-                      previous: {
-                        label: `前回サーベイ${growthPreviousParticipantCount > 0 ? `（${growthPreviousParticipantCount}）` : ""}`,
-                        color: "oklch(0.60 0.18 30)",
-                      },
-                    }}
+                    config={organizationGrowthSurveys.reduce((acc, survey) => {
+                      acc[survey.dataKey] = {
+                        label: `${survey.surveyName}${survey.participantCount > 0 ? `（${survey.participantCount}）` : ""}`,
+                        color: survey.color,
+                      }
+                      return acc
+                    }, {} as Record<string, { label: string; color: string }>)}
                     className="h-[200px] sm:h-[250px] md:h-[300px] w-full"
                   >
                     <ResponsiveContainer width="100%" height="100%">
@@ -2453,20 +2530,16 @@ export default function DashboardPage() {
                           tickCount={7}
                           tick={{ fill: "oklch(0.55 0.01 120)", fontSize: isMobile ? 8 : 10 }}
                         />
-                        <Radar
-                          name={`現在サーベイ${growthCurrentParticipantCount > 0 ? `（${growthCurrentParticipantCount}）` : ""}`}
-                          dataKey="current"
-                          stroke="oklch(0.50 0.20 240)"
-                          fill="oklch(0.50 0.20 240)"
-                          fillOpacity={0.3}
-                        />
-                        <Radar
-                          name={`前回サーベイ${growthPreviousParticipantCount > 0 ? `（${growthPreviousParticipantCount}）` : ""}`}
-                          dataKey="previous"
-                          stroke="oklch(0.60 0.18 30)"
-                          fill="oklch(0.60 0.18 30)"
-                          fillOpacity={0.2}
-                        />
+                        {organizationGrowthSurveys.map((survey, index) => (
+                          <Radar
+                            key={survey.surveyId}
+                            name={`${survey.surveyName}${survey.participantCount > 0 ? `（${survey.participantCount}）` : ""}`}
+                            dataKey={survey.dataKey}
+                            stroke={survey.color}
+                            fill={survey.color}
+                            fillOpacity={index === 0 ? 0.3 : index === 1 ? 0.2 : 0.15}
+                          />
+                        ))}
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "oklch(0.98 0.002 120)",

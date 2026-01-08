@@ -115,16 +115,28 @@ export default function EmployeePortal() {
           api.growthSurveyResponses.get(),
         ])
 
+        // Debug logging
+        console.log('[Employee Portal] Growth survey period response:', periodRes)
+        console.log('[Employee Portal] Growth survey questions response:', questionsRes)
+        console.log('[Employee Portal] Growth survey responses:', responsesRes)
+
         const surveyPeriodAvailable = periodRes?.success && periodRes.available
         const total = surveyPeriodAvailable ? questionsRes?.questions?.length ?? 0 : 0
+        
+        console.log('[Employee Portal] Survey period available:', surveyPeriodAvailable)
+        console.log('[Employee Portal] Total questions:', total)
+
         const responsePayload = responsesRes?.response
+        // progressCount includes skipped questions (s: null) as answered
         const progress = responsePayload?.progressCount ?? Math.min(responsePayload?.responses?.length || 0, total)
+        // Mark as completed if progressCount >= total (including skipped questions)
+        const isCompleted = Boolean(responsePayload?.completed) || (total > 0 && progress >= total)
 
         setGrowthSurveyInfo({
           available: surveyPeriodAvailable && total > 0,
           total,
           progress,
-          completed: Boolean(responsePayload?.completed),
+          completed: isCompleted,
           message: surveyPeriodAvailable
             ? total > 0
               ? ""
@@ -132,7 +144,8 @@ export default function EmployeePortal() {
             : "現在、グロースサーベイのサーベイ期間ではありません。",
         })
       } catch (error) {
-                setGrowthSurveyInfo((prev) => ({
+        console.error('[Employee Portal] Error fetching growth survey info:', error)
+        setGrowthSurveyInfo((prev) => ({
           ...prev,
           available: false,
           message: "グロースサーベイの取得に失敗しました",

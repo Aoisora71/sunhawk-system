@@ -163,12 +163,37 @@ export async function getActiveGrowthSurvey() {
        AND column_name = 'running'`
   )
   const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
-  const runningFilter = hasRunning ? ' AND (running IS NULL OR running = true)' : ''
-
-  // Use CURRENT_DATE to handle date comparisons correctly
-  // Using ::date cast ensures we compare only the date part, ignoring time components
-  // end_date >= CURRENT_DATE means end_date is today or later (surveys ending today are still active)
-  const result = await query<{
+  
+  // First, try to find a survey with running = true (regardless of date)
+  // If not found, then check for surveys within date range
+  let result: any = { rows: [] }
+  
+  if (hasRunning) {
+    // First query: Look for running = true surveys (no date check)
+    const runningResult = await query<{
+      id: number
+      name: string
+      start_date: string
+      end_date: string
+      status: string
+      survey_type: string | null
+    }>(
+      `SELECT id, name, start_date, end_date, status, survey_type
+       FROM surveys
+       WHERE status = 'active'
+         AND survey_type = 'growth'
+         AND running = true
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    )
+    
+    if (runningResult.rows.length > 0) {
+      return runningResult.rows[0]
+    }
+  }
+  
+  // If no running = true survey found, check date range
+  const dateResult = await query<{
     id: number
     name: string
     start_date: string
@@ -182,24 +207,58 @@ export async function getActiveGrowthSurvey() {
        AND survey_type = 'growth'
        AND start_date::date <= CURRENT_DATE
        AND end_date::date >= CURRENT_DATE
-       ${runningFilter}
      ORDER BY created_at DESC
      LIMIT 1`,
   )
 
-  if (result.rows.length === 0) return null
-  return result.rows[0]
+  if (dateResult.rows.length === 0) return null
+  return dateResult.rows[0]
 }
 
 /**
  * Get active organizational survey
- * Uses the same date comparison logic as getActiveGrowthSurvey and /api/surveys/period
+ * Uses the same two-step query approach as getActiveGrowthSurvey and /api/surveys/period
+ * First, try to find a survey with running = true (regardless of date)
+ * If not found, then check for surveys within date range
  */
 export async function getActiveOrganizationalSurvey() {
-  // Use CURRENT_DATE to handle date comparisons correctly
-  // Using ::date cast ensures we compare only the date part, ignoring time components
-  // end_date >= CURRENT_DATE means end_date is today or later (surveys ending today are still active)
-  const result = await query<{
+  // Check if running column exists
+  const columnCheck = await query<{ column_name: string }>(
+    `SELECT column_name 
+     FROM information_schema.columns 
+     WHERE table_name = 'surveys' 
+       AND column_name = 'running'`
+  )
+  const hasRunning = columnCheck.rows.some(r => r.column_name === 'running')
+  
+  // First, try to find a survey with running = true (regardless of date)
+  // If not found, then check for surveys within date range
+  if (hasRunning) {
+    // First query: Look for running = true surveys (no date check)
+    const runningResult = await query<{
+      id: number
+      name: string
+      start_date: string
+      end_date: string
+      status: string
+      survey_type: string | null
+    }>(
+      `SELECT id, name, start_date, end_date, status, survey_type
+       FROM surveys
+       WHERE status = 'active'
+         AND survey_type = 'organizational'
+         AND running = true
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    )
+    
+    if (runningResult.rows.length > 0) {
+      return runningResult.rows[0]
+    }
+  }
+  
+  // If no running = true survey found, check date range
+  const dateResult = await query<{
     id: number
     name: string
     start_date: string
@@ -217,7 +276,7 @@ export async function getActiveOrganizationalSurvey() {
      LIMIT 1`,
   )
 
-  if (result.rows.length === 0) return null
-  return result.rows[0]
+  if (dateResult.rows.length === 0) return null
+  return dateResult.rows[0]
 }
 
