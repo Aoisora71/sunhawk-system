@@ -86,17 +86,17 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
         const targetSurveyId = surveyId || (orgSurveys.length > 0 ? orgSurveys[0].id : null)
         if (targetSurveyId) {
           setSelectedOrgSurveyId(targetSurveyId)
-          try {
-            const response = await api.organizationalSurveyResults.getFreeTextResponses(
+            try {
+              const response = await api.organizationalSurveyResults.getFreeTextResponses(
               targetSurveyId.toString(),
-              employeeIdNum.toString()
-            )
-            if (response?.success && response.responses) {
+                employeeIdNum.toString()
+              )
+              if (response?.success && response.responses) {
               setOrgResponses(response.responses)
             } else {
               setOrgResponses([])
-            }
-          } catch (error) {
+              }
+            } catch (error) {
             console.error(`Error fetching responses for survey ${targetSurveyId}:`, error)
             setOrgResponses([])
           }
@@ -151,8 +151,8 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
               employeeIdNum.toString(),
               targetSurveyId.toString()
             )
-            if (response?.success && response.responses) {
-              setGrowthResponses(response.responses)
+      if (response?.success && response.responses) {
+        setGrowthResponses(response.responses)
             } else {
               setGrowthResponses([])
             }
@@ -419,17 +419,17 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
                 <div className="space-y-6">
                   {orgResponses.map((response, idx) => (
                     <Card key={idx}>
-                      <CardHeader>
+                        <CardHeader>
                         <CardTitle className="text-base sm:text-lg">
                           {response.questionText || `質問ID: ${response.questionId}`}
                         </CardTitle>
-                      </CardHeader>
+                        </CardHeader>
                       <CardContent>
-                        <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
-                          {response.answerText || "回答なし"}
-                        </div>
-                      </CardContent>
-                    </Card>
+                              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
+                                {response.answerText || "回答なし"}
+                              </div>
+                        </CardContent>
+                      </Card>
                   ))}
                 </div>
               ) : (
@@ -478,17 +478,17 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
                 <div className="space-y-6">
                   {growthResponses.map((response, idx) => (
                     <Card key={idx}>
-                      <CardHeader>
+                        <CardHeader>
                         <CardTitle className="text-base sm:text-lg">
                           {response.questionText || `質問ID: ${response.questionId}`}
                         </CardTitle>
-                      </CardHeader>
+                        </CardHeader>
                       <CardContent>
-                        <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
-                          {response.answerText || "回答なし"}
-                        </div>
-                      </CardContent>
-                    </Card>
+                              <div className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted p-3 rounded-md">
+                                {response.answerText || "回答なし"}
+                              </div>
+                        </CardContent>
+                      </Card>
                   ))}
                 </div>
               ) : (

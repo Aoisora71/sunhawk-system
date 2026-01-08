@@ -83,7 +83,7 @@ export default function GrowthSurveyPage() {
           const total = payload.totalQuestions || questions.length
 
           const skippedSet = new Set<number>()
-          
+
           if (Array.isArray(payload.responses)) {
             payload.responses.forEach((entry) => {
               const question = questions.find((q) => q.id === entry.questionId)
@@ -259,7 +259,7 @@ export default function GrowthSurveyPage() {
         // If skipping would go beyond the last question, just go to the last question
         setCurrentQuestionIndex(questions.length - 1)
       }
-      // Don't scroll to top - keep current scroll position
+        // Don't scroll to top - keep current scroll position
       return
     }
 
@@ -363,10 +363,10 @@ export default function GrowthSurveyPage() {
           }))
         }
       } else {
-        setStatus((prev) => ({
-          total: response.totalQuestions || prev.total || questions.length,
-          progress: response.progressCount ?? prev.progress + (wasAlreadyAnswered ? 0 : 1),
-        }))
+      setStatus((prev) => ({
+        total: response.totalQuestions || prev.total || questions.length,
+        progress: response.progressCount ?? prev.progress + (wasAlreadyAnswered ? 0 : 1),
+      }))
       }
       
       // Mark skipped question as answered in local state
