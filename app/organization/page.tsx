@@ -26,6 +26,10 @@ export default function OrganizationPage() {
   const [scoresLoading, setScoresLoading] = useState(false)
   const [currentOrgAverageScore, setCurrentOrgAverageScore] = useState<number | null>(null)
   const [previousOrgAverageScore, setPreviousOrgAverageScore] = useState<number | null>(null)
+  const [currentOrgSurveyName, setCurrentOrgSurveyName] = useState<string | null>(null)
+  const [previousOrgSurveyName, setPreviousOrgSurveyName] = useState<string | null>(null)
+  const [currentOrgSurveyPeriod, setCurrentOrgSurveyPeriod] = useState<string | null>(null)
+  const [previousOrgSurveyPeriod, setPreviousOrgSurveyPeriod] = useState<string | null>(null)
   const [orgAverageLoading, setOrgAverageLoading] = useState(false)
 
   const jobOrderMap = useMemo(() => {
@@ -248,7 +252,9 @@ export default function OrganizationPage() {
           number,
           {
             summaries: any[]
+            startDate: string | null
             endDate: string | null
+            surveyName: string | null
           }
         >()
 
@@ -256,31 +262,75 @@ export default function OrganizationPage() {
           const sid = Number(row.surveyId)
           if (!Number.isFinite(sid)) return
           if (!bySurvey.has(sid)) {
-            bySurvey.set(sid, { summaries: [], endDate: row.endDate || row.end_date || null })
+            bySurvey.set(sid, { 
+              summaries: [], 
+              startDate: row.startDate || row.start_date || null,
+              endDate: row.endDate || row.end_date || null,
+              surveyName: row.surveyName || row.survey_name || null
+            })
           }
           bySurvey.get(sid)!.summaries.push(row)
+          // Update startDate if available (use earliest startDate)
+          const newStart = row.startDate || row.start_date || null
+          if (newStart) {
+            const currentStart = bySurvey.get(sid)!.startDate
+            if (!currentStart || new Date(newStart) < new Date(currentStart)) {
+              bySurvey.get(sid)!.startDate = newStart
+            }
+          }
           const currentEnd = bySurvey.get(sid)!.endDate
           const newEnd = row.endDate || row.end_date || null
           if (newEnd && (!currentEnd || new Date(newEnd) > new Date(currentEnd))) {
             bySurvey.get(sid)!.endDate = newEnd
+          }
+          // Update surveyName if available
+          if (!bySurvey.get(sid)!.surveyName && (row.surveyName || row.survey_name)) {
+            bySurvey.get(sid)!.surveyName = row.surveyName || row.survey_name
           }
         })
 
         if (bySurvey.size === 0) {
           setCurrentOrgAverageScore(null)
           setPreviousOrgAverageScore(null)
+          setCurrentOrgSurveyName(null)
+          setPreviousOrgSurveyName(null)
+          setCurrentOrgSurveyPeriod(null)
+          setPreviousOrgSurveyPeriod(null)
           return
         }
 
-        // Sort surveys by endDate desc (latest first)
+        // Sort surveys by startDate desc (latest first)
+        // If startDate is the same, sort by surveyId desc
+        // Surveys without startDate are sorted to the end
         const sortedSurveys = Array.from(bySurvey.entries()).sort((a, b) => {
-          const aEnd = a[1].endDate ? new Date(a[1].endDate).getTime() : 0
-          const bEnd = b[1].endDate ? new Date(b[1].endDate).getTime() : 0
-          return bEnd - aEnd
+          const aStart = a[1].startDate ? new Date(a[1].startDate).getTime() : -Infinity
+          const bStart = b[1].startDate ? new Date(b[1].startDate).getTime() : -Infinity
+          if (aStart === bStart) {
+            // If startDate is the same (or both are null), sort by surveyId desc
+            return b[0] - a[0]
+          }
+          return bStart - aStart
         })
 
         const currentSurvey = sortedSurveys[0]
         const previousSurvey = sortedSurveys.length > 1 ? sortedSurveys[1] : null
+
+        // Helper to format period string
+        const formatPeriod = (startDate: string | null, endDate: string | null): string | null => {
+          if (!startDate && !endDate) return null
+          const formatDate = (dateStr: string) => {
+            const date = new Date(dateStr)
+            return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`
+          }
+          if (startDate && endDate) {
+            return `${formatDate(startDate)} 〜 ${formatDate(endDate)}`
+          } else if (startDate) {
+            return `${formatDate(startDate)} 〜`
+          } else if (endDate) {
+            return `〜 ${formatDate(endDate)}`
+          }
+          return null
+        }
 
         // Calculate average for current survey
         if (currentSurvey && currentSurvey[1].summaries.length > 0) {
@@ -293,11 +343,17 @@ export default function OrganizationPage() {
             // Cap score at 100
             const cappedAvg = avg > 100 ? 100 : avg
             setCurrentOrgAverageScore(Number.isFinite(cappedAvg) ? Number(cappedAvg.toFixed(1)) : null)
+            setCurrentOrgSurveyName(currentSurvey[1].surveyName || `サーベイ ${currentSurvey[0]}`)
+            setCurrentOrgSurveyPeriod(formatPeriod(currentSurvey[1].startDate, currentSurvey[1].endDate))
           } else {
             setCurrentOrgAverageScore(null)
+            setCurrentOrgSurveyName(null)
+            setCurrentOrgSurveyPeriod(null)
           }
         } else {
           setCurrentOrgAverageScore(null)
+          setCurrentOrgSurveyName(null)
+          setCurrentOrgSurveyPeriod(null)
         }
 
         // Calculate average for previous survey
@@ -311,15 +367,25 @@ export default function OrganizationPage() {
             // Cap score at 100
             const cappedAvg = avg > 100 ? 100 : avg
             setPreviousOrgAverageScore(Number.isFinite(cappedAvg) ? Number(cappedAvg.toFixed(1)) : null)
+            setPreviousOrgSurveyName(previousSurvey[1].surveyName || `サーベイ ${previousSurvey[0]}`)
+            setPreviousOrgSurveyPeriod(formatPeriod(previousSurvey[1].startDate, previousSurvey[1].endDate))
           } else {
             setPreviousOrgAverageScore(null)
+            setPreviousOrgSurveyName(null)
+            setPreviousOrgSurveyPeriod(null)
           }
         } else {
           setPreviousOrgAverageScore(null)
+          setPreviousOrgSurveyName(null)
+          setPreviousOrgSurveyPeriod(null)
         }
       } catch (error) {
-                setCurrentOrgAverageScore(null)
+        setCurrentOrgAverageScore(null)
         setPreviousOrgAverageScore(null)
+        setCurrentOrgSurveyName(null)
+        setPreviousOrgSurveyName(null)
+        setCurrentOrgSurveyPeriod(null)
+        setPreviousOrgSurveyPeriod(null)
       } finally {
         setOrgAverageLoading(false)
       }
@@ -641,21 +707,59 @@ export default function OrganizationPage() {
                       <Badge className="bg-[oklch(0.55_0.15_160)] text-white text-xs">N/A</Badge>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {currentOrgAverageScore !== null && (
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <span className="text-xs sm:text-sm text-muted-foreground">現在:</span>
-                          <span className="text-base sm:text-lg md:text-2xl font-medium text-foreground">
-                            {currentOrgAverageScore}
-                          </span>
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <span className="text-base sm:text-lg md:text-2xl font-medium text-foreground">
+                              {currentOrgAverageScore}
+                            </span>
+                            <Badge variant="secondary" className="text-xs">最新</Badge>
+                          </div>
+                          {(currentOrgSurveyName || currentOrgSurveyPeriod) && (
+                            <div className="text-xs text-muted-foreground leading-relaxed">
+                              {currentOrgSurveyName && currentOrgSurveyPeriod ? (
+                                <span className="truncate block" title={`${currentOrgSurveyName}（${currentOrgSurveyPeriod}）`}>
+                                  {currentOrgSurveyName}（{currentOrgSurveyPeriod}）
+                                </span>
+                              ) : currentOrgSurveyName ? (
+                                <span className="truncate block" title={currentOrgSurveyName}>
+                                  {currentOrgSurveyName}
+                                </span>
+                              ) : currentOrgSurveyPeriod ? (
+                                <span className="truncate block" title={currentOrgSurveyPeriod}>
+                                  {currentOrgSurveyPeriod}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                       )}
                       {previousOrgAverageScore !== null && (
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <span className="text-xs sm:text-sm text-muted-foreground">前回:</span>
-                          <span className="text-base sm:text-lg md:text-xl font-medium text-foreground">
-                            {previousOrgAverageScore}
-                          </span>
+                        <div className="flex flex-col gap-1.5 pt-2 border-t border-border/50">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <span className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
+                              {previousOrgAverageScore}
+                            </span>
+                            <Badge variant="outline" className="text-xs">前回</Badge>
+                          </div>
+                          {(previousOrgSurveyName || previousOrgSurveyPeriod) && (
+                            <div className="text-xs text-muted-foreground leading-relaxed">
+                              {previousOrgSurveyName && previousOrgSurveyPeriod ? (
+                                <span className="truncate block" title={`${previousOrgSurveyName}（${previousOrgSurveyPeriod}）`}>
+                                  {previousOrgSurveyName}（{previousOrgSurveyPeriod}）
+                                </span>
+                              ) : previousOrgSurveyName ? (
+                                <span className="truncate block" title={previousOrgSurveyName}>
+                                  {previousOrgSurveyName}
+                                </span>
+                              ) : previousOrgSurveyPeriod ? (
+                                <span className="truncate block" title={previousOrgSurveyPeriod}>
+                                  {previousOrgSurveyPeriod}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -103,8 +103,21 @@ async function handlePut(
     const freeTextCount = freeTextCountResult.rows[0]?.count || 0
 
     // Calculate response rate: (answered questions including free text / total questions) * 100
-    const singleChoiceCount = responseArray.length
-    const totalAnsweredCount = singleChoiceCount + freeTextCount
+    // Use the same logic as survey-response-status route
+    const singleChoiceCount = Array.isArray(responseArray) ? responseArray.length : 0
+    // Check for overlap between single choice and free text questions
+    const singleChoiceQuestionIds = new Set(responseArray.map((item: any) => item.qid ?? item.questionId))
+    // Get free text question IDs to check for overlap
+    const freeTextQuestionIdsResult = await query<{ qid: number }>(
+      `SELECT DISTINCT qid 
+       FROM organizational_survey_free_text_responses 
+       WHERE uid = $1 AND osid = $2`,
+      [user.userId, surveyId]
+    )
+    const freeTextQuestionIds = new Set(freeTextQuestionIdsResult.rows.map((row: any) => row.qid))
+    // Count unique answered questions (avoid double counting if same question answered in both formats)
+    const allAnsweredQuestionIds = new Set([...singleChoiceQuestionIds, ...freeTextQuestionIds])
+    const totalAnsweredCount = allAnsweredQuestionIds.size
     const responseRate =
       totalProblems > 0
         ? Math.round((totalAnsweredCount / totalProblems) * 100 * 100) / 100 // Round to 2 decimal places
@@ -251,8 +264,21 @@ async function handleDelete(
     const freeTextCount = freeTextCountResult.rows[0]?.count || 0
 
     // Calculate response rate: (answered questions including free text / total questions) * 100
-    const singleChoiceCount = updatedArray.length
-    const totalAnsweredCount = singleChoiceCount + freeTextCount
+    // Use the same logic as survey-response-status route
+    const singleChoiceCount = Array.isArray(updatedArray) ? updatedArray.length : 0
+    // Check for overlap between single choice and free text questions
+    const singleChoiceQuestionIds = new Set(updatedArray.map((item: any) => item.qid ?? item.questionId))
+    // Get free text question IDs to check for overlap
+    const freeTextQuestionIdsResult = await query<{ qid: number }>(
+      `SELECT DISTINCT qid 
+       FROM organizational_survey_free_text_responses 
+       WHERE uid = $1 AND osid = $2`,
+      [user.userId, surveyId]
+    )
+    const freeTextQuestionIds = new Set(freeTextQuestionIdsResult.rows.map((row: any) => row.qid))
+    // Count unique answered questions (avoid double counting if same question answered in both formats)
+    const allAnsweredQuestionIds = new Set([...singleChoiceQuestionIds, ...freeTextQuestionIds])
+    const totalAnsweredCount = allAnsweredQuestionIds.size
     const responseRate =
       totalProblems > 0
         ? Math.round((totalAnsweredCount / totalProblems) * 100 * 100) / 100 // Round to 2 decimal places
