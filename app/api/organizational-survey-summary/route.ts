@@ -16,11 +16,15 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     const surveyId = searchParams.get("surveyId")
     const forOrganization = searchParams.get("forOrganization") === "true"
 
-    // Check cache first (aggressive caching for 70 users)
-    const cacheKey = `org_survey_summary:${user.userId}:${surveyId || 'all'}:${forOrganization}`
-    const cached = cache.get<any>(cacheKey)
-    if (cached !== null) {
-      return successResponse({ summaries: cached })
+    // Skip cache for organization view to ensure display field changes are immediately reflected
+    // Check cache only for non-organization view (user-specific data)
+    let cached: any = null
+    if (!forOrganization) {
+      const cacheKey = `org_survey_summary:${user.userId}:${surveyId || 'all'}:${forOrganization}`
+      cached = cache.get<any>(cacheKey)
+      if (cached !== null) {
+        return successResponse({ summaries: cached })
+      }
     }
 
     let queryText = `
@@ -64,8 +68,9 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     }
 
     // Filter by display = true for organization view (to show all displayable surveys in radar chart)
+    // Only include surveys where display is explicitly true (exclude false and null/undefined)
     if (forOrganization) {
-      queryText += ` AND (s.display = true OR s.display IS NULL)`
+      queryText += ` AND s.display = true`
     }
 
     queryText += ` ORDER BY created_at DESC`
@@ -112,9 +117,13 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
       display: row.display !== undefined ? Boolean(row.display) : null,
     }))
 
-    // Cache results - longer TTL for organization view (less frequently updated)
-    const cacheTTL = forOrganization ? 5 * 60 * 1000 : 2 * 60 * 1000 // 5 min for org, 2 min for user
-    cache.set(cacheKey, summaries, cacheTTL)
+    // Cache results only for non-organization view (user-specific data)
+    // Skip caching for organization view to ensure display field changes are immediately reflected
+    if (!forOrganization) {
+      const cacheKey = `org_survey_summary:${user.userId}:${surveyId || 'all'}:${forOrganization}`
+      const cacheTTL = 2 * 60 * 1000 // 2 min for user
+      cache.set(cacheKey, summaries, cacheTTL)
+    }
 
     return successResponse({ summaries })
   } catch (error) {

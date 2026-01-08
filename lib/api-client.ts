@@ -710,7 +710,10 @@ export const organizationalSurveySummaryApi = {
     if (forOrganization) params.append('forOrganization', 'true')
     const queryString = params.toString()
     const suffix = queryString ? `?${queryString}` : ''
-    return apiFetch<{ success: boolean; summaries: any[] }>(`/organizational-survey-summary${suffix}`)
+    // Explicitly disable cache for organization view to ensure display field changes are immediately reflected
+    return apiFetch<{ success: boolean; summaries: any[] }>(`/organizational-survey-summary${suffix}`, {
+      cache: 'no-store',
+    })
   },
   getDetailedResponses: async (surveyIds: string[], departmentIds: string[], jobIds: string[], categoryId: string) => {
     const params = new URLSearchParams()

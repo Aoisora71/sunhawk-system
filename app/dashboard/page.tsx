@@ -1459,7 +1459,19 @@ export default function DashboardPage() {
 
         const summaries = summaryRes.summaries
 
-        // Group by surveyId and collect date info
+        // Filter summaries to only include display = true surveys
+        const displaySummaries = summaries.filter((row: any) => {
+          // Include if display is explicitly true (exclude false and null/undefined)
+          return row.display === true
+        })
+
+        if (displaySummaries.length === 0) {
+          setRadarData([])
+          setDepartmentChartData([])
+          return
+        }
+
+        // Group by surveyId and collect date info (only for display = true surveys)
         const bySurvey = new Map<
           number,
           {
@@ -1468,7 +1480,7 @@ export default function DashboardPage() {
           }
         >()
 
-        summaries.forEach((row: any) => {
+        displaySummaries.forEach((row: any) => {
           const sid = Number(row.surveyId)
           if (!Number.isFinite(sid)) return
           if (!bySurvey.has(sid)) {
@@ -1496,8 +1508,8 @@ export default function DashboardPage() {
           return bEnd - aEnd
         })
 
-        // Get all display = true surveys (all surveys from the API are already filtered)
-        const displaySurveys = sortedSurveys // All surveys returned are display = true
+        // All surveys in sortedSurveys are display = true (already filtered above)
+        const displaySurveys = sortedSurveys
 
         const computeCategoryAverages = (rows: any[]) => {
           const count = rows.length || 1
@@ -1605,11 +1617,7 @@ export default function DashboardPage() {
         setRadarData(data)
 
         // ---- Historical overall scores per survey (by survey start month) ----
-        // Filter summaries to only include display = true surveys
-        const displaySummaries = summaries.filter((row: any) => {
-          // Include if display is true or null (for backward compatibility)
-          return row.display === true || row.display === null || row.display === undefined
-        })
+        // Use already filtered displaySummaries (only display = true surveys)
 
         type SurveyBucket = {
           startDate: string | null

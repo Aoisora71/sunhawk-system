@@ -380,7 +380,7 @@ export default function OrganizationPage() {
           setPreviousOrgSurveyPeriod(null)
         }
       } catch (error) {
-        setCurrentOrgAverageScore(null)
+                setCurrentOrgAverageScore(null)
         setPreviousOrgAverageScore(null)
         setCurrentOrgSurveyName(null)
         setPreviousOrgSurveyName(null)
@@ -710,10 +710,10 @@ export default function OrganizationPage() {
                     <div className="space-y-2.5">
                       {currentOrgAverageScore !== null && (
                         <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 sm:gap-3">
-                            <span className="text-base sm:text-lg md:text-2xl font-medium text-foreground">
-                              {currentOrgAverageScore}
-                            </span>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <span className="text-base sm:text-lg md:text-2xl font-medium text-foreground">
+                            {currentOrgAverageScore}
+                          </span>
                             <Badge variant="secondary" className="text-xs">最新</Badge>
                           </div>
                           {(currentOrgSurveyName || currentOrgSurveyPeriod) && (
@@ -737,10 +737,10 @@ export default function OrganizationPage() {
                       )}
                       {previousOrgAverageScore !== null && (
                         <div className="flex flex-col gap-1.5 pt-2 border-t border-border/50">
-                          <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3">
                             <span className="text-base sm:text-lg md:text-xl font-medium text-muted-foreground">
-                              {previousOrgAverageScore}
-                            </span>
+                            {previousOrgAverageScore}
+                          </span>
                             <Badge variant="outline" className="text-xs">前回</Badge>
                           </div>
                           {(previousOrgSurveyName || previousOrgSurveyPeriod) && (

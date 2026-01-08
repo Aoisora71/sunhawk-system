@@ -145,7 +145,7 @@ export default function EmployeePortal() {
         })
       } catch (error) {
         console.error('[Employee Portal] Error fetching growth survey info:', error)
-        setGrowthSurveyInfo((prev) => ({
+                setGrowthSurveyInfo((prev) => ({
           ...prev,
           available: false,
           message: "グロースサーベイの取得に失敗しました",
