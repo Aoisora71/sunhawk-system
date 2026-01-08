@@ -36,6 +36,7 @@ const answerLabels = [
 
 export function ProblemBankSection() {
   const [problems, setProblems] = useState<Problem[]>([])
+  const [deleteProblemConfirm, setDeleteProblemConfirm] = useState<{ open: boolean; problemId: string | null; problemName: string | null }>({ open: false, problemId: null, problemName: null })
   const [isAddProblemOpen, setIsAddProblemOpen] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   // Type for editing state - uses string scores for form inputs
@@ -214,18 +215,28 @@ export function ProblemBankSection() {
   }
 
   const handleDeleteProblem = async (problemId: string) => {
+    const problem = problems.find((p) => p.id === Number(problemId))
+    setDeleteProblemConfirm({ open: true, problemId, problemName: problem?.questionText || null })
+  }
+
+  const confirmDeleteProblem = async () => {
+    if (!deleteProblemConfirm.problemId) return
+    
     toast.info("問題を削除しています…")
     try {
-      const response = await problemsApi.delete(problemId)
+      const response = await problemsApi.delete(deleteProblemConfirm.problemId)
       if (response?.success) {
         toast.success("問題を削除しました")
         fetchProblems()
+        setDeleteProblemConfirm({ open: false, problemId: null, problemName: null })
       } else {
         toast.error(response?.error || "問題の削除に失敗しました")
+        setDeleteProblemConfirm({ open: false, problemId: null, problemName: null })
       }
     } catch (error: any) {
       console.error("Error deleting problem:", error)
       toast.error(error?.message || "問題の削除に失敗しました")
+      setDeleteProblemConfirm({ open: false, problemId: null, problemName: null })
     }
   }
 
@@ -960,6 +971,26 @@ export function ProblemBankSection() {
                 </DialogFooter>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Problem Confirmation Dialog */}
+        <Dialog open={deleteProblemConfirm.open} onOpenChange={(open) => setDeleteProblemConfirm({ open, problemId: null, problemName: null })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>問題の削除</DialogTitle>
+              <DialogDescription>
+                「{deleteProblemConfirm.problemName}」を削除してもよろしいですか？この操作は取り消せません。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteProblemConfirm({ open: false, problemId: null, problemName: null })}>
+                キャンセル
+              </Button>
+              <Button variant="destructive" onClick={confirmDeleteProblem}>
+                削除
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>

@@ -42,6 +42,9 @@ export function SurveyPeriodSection() {
     endDate: "",
     surveyType: "organizational",
   })
+  const [deleteSurveyConfirm, setDeleteSurveyConfirm] = useState<{ open: boolean; surveyId: string | null; surveyName: string | null }>({ open: false, surveyId: null, surveyName: null })
+  const [runningSurveyError, setRunningSurveyError] = useState<{ open: boolean; currentSurvey: Survey | null; newSurvey: Survey | null }>({ open: false, currentSurvey: null, newSurvey: null })
+  const [displayLimitError, setDisplayLimitError] = useState<{ open: boolean; surveyType: string | null; currentCount: number }>({ open: false, surveyType: null, currentCount: 0 })
 
   const fetchSurveys = useCallback(async () => {
     try {
@@ -132,17 +135,27 @@ export function SurveyPeriodSection() {
   }
 
   const handleDeleteSurvey = async (surveyId: string) => {
+    const survey = surveys.find((s) => s.id === Number(surveyId))
+    setDeleteSurveyConfirm({ open: true, surveyId, surveyName: survey?.name || null })
+  }
+
+  const confirmDeleteSurvey = async () => {
+    if (!deleteSurveyConfirm.surveyId) return
+    
     toast.info("サーベイ期間を削除しています…")
     try {
-      const response = await api.surveys.delete(surveyId)
+      const response = await api.surveys.delete(deleteSurveyConfirm.surveyId)
       if (response?.success) {
         toast.success("サーベイ期間を削除しました")
         await fetchSurveys();
+        setDeleteSurveyConfirm({ open: false, surveyId: null, surveyName: null })
       } else {
         toast.error(response?.error || "サーベイ期間の削除に失敗しました")
+        setDeleteSurveyConfirm({ open: false, surveyId: null, surveyName: null })
       }
     } catch (error: any) {
       toast.error("サーベイ期間の削除に失敗しました")
+      setDeleteSurveyConfirm({ open: false, surveyId: null, surveyName: null })
     }
   }
 
@@ -153,8 +166,29 @@ export function SurveyPeriodSection() {
       return
     }
 
+    const currentRunning = survey.running ?? false
+    const newRunning = !currentRunning
+
+    // サーベイを開始しようとする場合、同じタイプで既に実行中のサーベイがないかチェック
+    if (newRunning) {
+      const runningSurveyOfSameType = surveys.find((s) => 
+        s.id !== survey.id && 
+        s.surveyType === survey.surveyType && 
+        (s.running === true)
+      )
+
+      if (runningSurveyOfSameType) {
+        // エラーモーダルを表示
+        setRunningSurveyError({
+          open: true,
+          currentSurvey: runningSurveyOfSameType,
+          newSurvey: survey,
+        })
+        return
+      }
+    }
+
     try {
-      const newRunning = !(survey.running ?? true)
       const response = await api.surveys.update(String(survey.id), {
         running: newRunning,
       })
@@ -171,8 +205,29 @@ export function SurveyPeriodSection() {
   }
 
   const handleToggleDisplay = async (survey: Survey) => {
+    const currentDisplay = survey.display ?? true
+    const newDisplay = !currentDisplay
+
+    // サーベイを表示しようとする場合、同じタイプで既に表示中のサーベイが5個以上ないかチェック
+    if (newDisplay) {
+      const displayedSurveysOfSameType = surveys.filter((s) => 
+        s.id !== survey.id && 
+        s.surveyType === survey.surveyType && 
+        (s.display === true)
+      )
+
+      if (displayedSurveysOfSameType.length >= 5) {
+        // エラーモーダルを表示
+        setDisplayLimitError({
+          open: true,
+          surveyType: survey.surveyType,
+          currentCount: displayedSurveysOfSameType.length,
+        })
+        return
+      }
+    }
+
     try {
-      const newDisplay = !(survey.display ?? true)
       const response = await api.surveys.update(String(survey.id), {
         display: newDisplay,
       })
@@ -589,6 +644,90 @@ export function SurveyPeriodSection() {
                 </DialogFooter>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Survey Confirmation Dialog */}
+        <Dialog open={deleteSurveyConfirm.open} onOpenChange={(open) => setDeleteSurveyConfirm({ open, surveyId: null, surveyName: null })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>サーベイ期間の削除</DialogTitle>
+              <DialogDescription>
+                「{deleteSurveyConfirm.surveyName}」を削除してもよろしいですか？この操作は取り消せません。関連するすべてのデータも削除されます。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteSurveyConfirm({ open: false, surveyId: null, surveyName: null })}>
+                キャンセル
+              </Button>
+              <Button variant="destructive" onClick={confirmDeleteSurvey}>
+                削除
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Running Survey Error Dialog */}
+        <Dialog open={runningSurveyError.open} onOpenChange={(open) => setRunningSurveyError({ open, currentSurvey: null, newSurvey: null })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>サーベイ実行エラー</DialogTitle>
+              <DialogDescription className="space-y-2">
+                <p>
+                  すでに進行中のサーベイがあるため、新しいサーベイを開始できません。
+                </p>
+                <p className="font-medium text-foreground">
+                  実行中のサーベイ: 「{runningSurveyError.currentSurvey?.name}」（{getSurveyTypeLabel(runningSurveyError.currentSurvey?.surveyType)}）
+                </p>
+                <p className="font-medium text-foreground">
+                  開始しようとしたサーベイ: 「{runningSurveyError.newSurvey?.name}」（{getSurveyTypeLabel(runningSurveyError.newSurvey?.surveyType)}）
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  新しいサーベイを開始するには、既存の実行中のサーベイを最初に停止してから開始してください。
+                </p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button 
+                variant="default" 
+                onClick={() => {
+                  if (runningSurveyError.currentSurvey) {
+                    handleToggleRunning(runningSurveyError.currentSurvey)
+                  }
+                  setRunningSurveyError({ open: false, currentSurvey: null, newSurvey: null })
+                }}
+              >
+                実行中のサーベイを停止
+              </Button>
+              <Button variant="outline" onClick={() => setRunningSurveyError({ open: false, currentSurvey: null, newSurvey: null })}>
+                閉じる
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Display Limit Error Dialog */}
+        <Dialog open={displayLimitError.open} onOpenChange={(open) => setDisplayLimitError({ open, surveyType: null, currentCount: 0 })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>サーベイ表示制限エラー</DialogTitle>
+              <DialogDescription className="space-y-2">
+                <p>
+                  {displayLimitError.surveyType && getSurveyTypeLabel(displayLimitError.surveyType)}は既に{displayLimitError.currentCount}個が表示されています。
+                </p>
+                <p className="font-medium text-foreground">
+                  {displayLimitError.surveyType && getSurveyTypeLabel(displayLimitError.surveyType)}は最大5個まで表示可能です。
+                </p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  新しいサーベイを表示するには、既存の表示中のサーベイのいずれかを非表示にしてから表示してください。
+                </p>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDisplayLimitError({ open: false, surveyType: null, currentCount: 0 })}>
+                閉じる
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>

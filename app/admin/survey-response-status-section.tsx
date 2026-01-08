@@ -524,36 +524,52 @@ export function SurveyResponseStatusSection() {
             
             {/* Statistics */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-              <Card>
-                <CardHeader className="pb-2 p-3 sm:p-6">
+              <Card className="hover:shadow-sm transition-shadow">
+                <CardHeader className="pb-2 sm:pb-3">
                   <CardDescription className="text-xs sm:text-sm">総従業員数</CardDescription>
                 </CardHeader>
-                <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-                  <div className="text-xl sm:text-2xl font-bold">{stats.totalEmployees}名</div>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-medium text-foreground">
+                      {stats.totalEmployees}名
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader className="pb-2 p-3 sm:p-6">
+              <Card className="hover:shadow-sm transition-shadow">
+                <CardHeader className="pb-2 sm:pb-3">
                   <CardDescription className="text-xs sm:text-sm">回答済み</CardDescription>
                 </CardHeader>
-                <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-green-600">{stats.respondedCount}名</div>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-medium text-green-600">
+                      {stats.respondedCount}名
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader className="pb-2 p-3 sm:p-6">
+              <Card className="hover:shadow-sm transition-shadow">
+                <CardHeader className="pb-2 sm:pb-3">
                   <CardDescription className="text-xs sm:text-sm">回答中</CardDescription>
                 </CardHeader>
-                <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-yellow-600">{stats.respondingCount}名</div>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-medium text-yellow-600">
+                      {stats.respondingCount}名
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader className="pb-2 p-3 sm:p-6">
+              <Card className="hover:shadow-sm transition-shadow">
+                <CardHeader className="pb-2 sm:pb-3">
                   <CardDescription className="text-xs sm:text-sm">未回答</CardDescription>
                 </CardHeader>
-                <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
-                  <div className="text-xl sm:text-2xl font-bold text-red-600">{stats.notRespondedCount}名</div>
+                <CardContent>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl sm:text-2xl md:text-3xl font-medium text-red-600">
+                      {stats.notRespondedCount}名
+                    </span>
+                  </div>
                 </CardContent>
               </Card>
             </div>

@@ -91,11 +91,11 @@ export async function GET(request: NextRequest) {
     if (result.rows.length === 0) {
       const dateFilter = ' AND start_date::date <= CURRENT_DATE AND end_date::date >= CURRENT_DATE'
       const dateQuery = `SELECT id, name, start_date, end_date, status, ${actualSurveyTypeColumn} as survey_type, running
-        FROM surveys
-        WHERE status = 'active'
+       FROM surveys
+       WHERE status = 'active'
           ${dateFilter}
-          ${filterClause}
-        ORDER BY created_at DESC
+         ${filterClause}
+       ORDER BY created_at DESC
         LIMIT 1`
       
       console.log('[Survey Period API] Date query:', dateQuery)

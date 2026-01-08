@@ -55,6 +55,7 @@ export function GrowthSurveySection() {
     questionType: "single_choice" as "single_choice" | "free_text",
     answers: [] as AnswerOption[],
   })
+  const [deleteQuestionConfirm, setDeleteQuestionConfirm] = useState<{ open: boolean; questionId: string | null; questionText: string | null }>({ open: false, questionId: null, questionText: null })
 
   useEffect(() => {
     fetchQuestions()
@@ -185,18 +186,28 @@ export function GrowthSurveySection() {
   }
 
   const handleDeleteQuestion = async (questionId: string) => {
+    const question = questions.find((q) => q.id === Number(questionId))
+    setDeleteQuestionConfirm({ open: true, questionId, questionText: question?.questionText || null })
+  }
+
+  const confirmDeleteQuestion = async () => {
+    if (!deleteQuestionConfirm.questionId) return
+    
     toast.info("質問を削除しています…")
     try {
-      const response = await growthSurveyQuestionsApi.delete(questionId)
+      const response = await growthSurveyQuestionsApi.delete(deleteQuestionConfirm.questionId)
       if (response?.success) {
         toast.success("質問を削除しました")
         fetchQuestions()
+        setDeleteQuestionConfirm({ open: false, questionId: null, questionText: null })
       } else {
         toast.error(response?.error || "質問の削除に失敗しました")
+        setDeleteQuestionConfirm({ open: false, questionId: null, questionText: null })
       }
     } catch (error: any) {
       console.error("Failed to delete growth survey question:", error)
       toast.error(error?.message || "質問の削除に失敗しました")
+      setDeleteQuestionConfirm({ open: false, questionId: null, questionText: null })
     }
   }
 
@@ -1325,6 +1336,26 @@ export function GrowthSurveySection() {
           </Table>
         </div>
       </CardContent>
+
+      {/* Delete Question Confirmation Dialog */}
+      <Dialog open={deleteQuestionConfirm.open} onOpenChange={(open) => setDeleteQuestionConfirm({ open, questionId: null, questionText: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>質問の削除</DialogTitle>
+            <DialogDescription>
+              「{deleteQuestionConfirm.questionText}」を削除してもよろしいですか？この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteQuestionConfirm({ open: false, questionId: null, questionText: null })}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteQuestion}>
+              削除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

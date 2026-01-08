@@ -43,13 +43,13 @@ function mapAnswers(value: any): GrowthSurveyQuestion["answers"] {
     }
     
     return {
-      text: typeof item?.text === "string" ? item.text : "",
-      score:
-        typeof item?.score === "number"
-          ? item.score
-          : item?.score === null || item?.score === undefined
-            ? null
-            : Number(item.score),
+    text: typeof item?.text === "string" ? item.text : "",
+    score:
+      typeof item?.score === "number"
+        ? item.score
+        : item?.score === null || item?.score === undefined
+          ? null
+          : Number(item.score),
       skip: skipValue,
     }
   })

@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [showDetailsDialog, setShowDetailsDialog] = useState<boolean>(false)
   const [detailsLoading, setDetailsLoading] = useState<boolean>(false)
   const [currentSurveyName, setCurrentSurveyName] = useState<string | null>(null)
+  const [detailsDialogSurveyType, setDetailsDialogSurveyType] = useState<'current' | 'latest' | null>(null)
   const [detailsData, setDetailsData] = useState<Array<{
     id: number
     userId: number
@@ -502,6 +503,11 @@ export default function DashboardPage() {
   const [latestOrgParticipantCount, setLatestOrgParticipantCount] = useState<number>(0)
   const [latestSurveyId, setLatestSurveyId] = useState<string | null>(null)
   const [orgScoreLoading, setOrgScoreLoading] = useState<boolean>(true)
+  // サーベイ名と期間
+  const [currentOrgSurveyDisplayName, setCurrentOrgSurveyDisplayName] = useState<string | null>(null)
+  const [currentOrgSurveyPeriod, setCurrentOrgSurveyPeriod] = useState<string | null>(null)
+  const [latestOrgSurveyDisplayName, setLatestOrgSurveyDisplayName] = useState<string | null>(null)
+  const [latestOrgSurveyPeriod, setLatestOrgSurveyPeriod] = useState<string | null>(null)
   const [radarData, setRadarData] = useState<
     Array<{ category: string; fullMark: number; [key: string]: string | number | null }>
   >([])
@@ -1122,6 +1128,23 @@ export default function DashboardPage() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  // Helper to format period string
+  const formatSurveyPeriod = (startDate: string | null | undefined, endDate: string | null | undefined): string | null => {
+    if (!startDate && !endDate) return null
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr)
+      return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`
+    }
+    if (startDate && endDate) {
+      return `${formatDate(startDate)} 〜 ${formatDate(endDate)}`
+    } else if (startDate) {
+      return `${formatDate(startDate)} 〜`
+    } else if (endDate) {
+      return `〜 ${formatDate(endDate)}`
+    }
+    return null
+  }
+
   // Load current organizational survey overall score (active survey)
   useEffect(() => {
     const loadCurrentOrganizationalScore = async () => {
@@ -1134,11 +1157,19 @@ export default function DashboardPage() {
           setCurrentOrgScore(null)
           setCurrentOrgParticipantCount(0)
           setCurrentSurveyId(null)
+          setCurrentOrgSurveyDisplayName(null)
+          setCurrentOrgSurveyPeriod(null)
           return
         }
 
         const surveyId = period.survey.id
         setCurrentSurveyId(surveyId)
+        
+        // サーベイ名と期間を設定
+        const surveyName = period.survey.name || `サーベイ ${surveyId}`
+        const surveyPeriod = formatSurveyPeriod(period.survey.startDate, period.survey.endDate)
+        setCurrentOrgSurveyDisplayName(surveyName)
+        setCurrentOrgSurveyPeriod(surveyPeriod)
 
         // アクティブなサーベイのサマリーを取得（組織全体）
         const summaryRes = await api.organizationalSurveySummary.list(surveyId, true)
@@ -1165,6 +1196,8 @@ export default function DashboardPage() {
         console.error("Failed to load current organizational survey score:", error)
         setCurrentOrgScore(null)
         setCurrentOrgParticipantCount(0)
+        setCurrentOrgSurveyDisplayName(null)
+        setCurrentOrgSurveyPeriod(null)
       } finally {
         setOrgScoreLoading(false)
       }
@@ -1173,27 +1206,43 @@ export default function DashboardPage() {
     loadCurrentOrganizationalScore()
   }, [])
 
-  // Load latest completed organizational survey overall score (last survey ended before today)
+  // Load latest completed organizational survey overall score (latest survey by startDate, excluding current active survey)
   useEffect(() => {
     const loadLatestOrganizationalScore = async () => {
       try {
+        // 現在進行中のサーベイIDを取得
+        let currentActiveSurveyId: string | null = null
+        try {
+          const period = await api.surveyPeriodApi.checkAvailability("organizational")
+          if (period?.success && period.available && period.survey?.id) {
+            currentActiveSurveyId = period.survey.id
+          }
+        } catch (error) {
+          // 現在進行中のサーベイ取得に失敗しても続行
+          console.error("Failed to get current active survey:", error)
+        }
+
         const summaryRes = await api.organizationalSurveySummary.list(undefined, true)
 
         if (!summaryRes?.success || !Array.isArray(summaryRes.summaries) || summaryRes.summaries.length === 0) {
           setLatestOrgScore(null)
           setLatestOrgParticipantCount(0)
           setLatestSurveyId(null)
+          setLatestOrgSurveyDisplayName(null)
+          setLatestOrgSurveyPeriod(null)
           return
         }
 
         const summaries = summaryRes.summaries
 
-        // サーベイIDごとにグルーピングし、endDate を持たせる
+        // サーベイIDごとにグルーピングし、startDate, endDate を持たせる
         const bySurvey = new Map<
           number,
           {
             summaries: any[]
+            startDate: string | null
             endDate: string | null
+            surveyName: string | null
           }
         >()
 
@@ -1201,19 +1250,39 @@ export default function DashboardPage() {
           const sid = Number(row.surveyId)
           if (!Number.isFinite(sid)) return
 
+          // 現在進行中のサーベイを除外
+          if (currentActiveSurveyId && String(sid) === currentActiveSurveyId) {
+            return
+          }
+
           if (!bySurvey.has(sid)) {
             bySurvey.set(sid, {
               summaries: [],
+              startDate: row.startDate || row.start_date || null,
               endDate: row.endDate || row.end_date || null,
+              surveyName: row.surveyName || row.survey_name || null,
             })
           }
 
           const entry = bySurvey.get(sid)!
           entry.summaries.push(row)
 
+          // Update startDate if available (use earliest startDate)
+          if (row.startDate || row.start_date) {
+            const newStart = row.startDate || row.start_date
+            if (!entry.startDate || new Date(newStart) < new Date(entry.startDate)) {
+              entry.startDate = newStart
+            }
+          }
+          
           const newEnd = row.endDate || row.end_date || null
           if (newEnd && (!entry.endDate || new Date(newEnd) > new Date(entry.endDate))) {
             entry.endDate = newEnd
+          }
+          
+          // Update surveyName if available
+          if (!entry.surveyName && (row.surveyName || row.survey_name)) {
+            entry.surveyName = row.surveyName || row.survey_name
           }
         })
 
@@ -1221,41 +1290,32 @@ export default function DashboardPage() {
           setLatestOrgScore(null)
           setLatestOrgParticipantCount(0)
           setLatestSurveyId(null)
+          setLatestOrgSurveyDisplayName(null)
+          setLatestOrgSurveyPeriod(null)
           return
         }
 
-        const now = new Date()
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-        // 現在日付より前に終了したサーベイのみ対象
-        const completedSurveys = Array.from(bySurvey.entries()).filter(([, info]) => {
-          if (!info.endDate) return false
-          const end = new Date(info.endDate)
-          return end < today
+        // 開始日（startDate）の降順でソート（最新開始サーベイが先頭）
+        const sortedSurveys = Array.from(bySurvey.entries()).sort((a, b) => {
+          const aStart = a[1].startDate ? new Date(a[1].startDate).getTime() : 0
+          const bStart = b[1].startDate ? new Date(b[1].startDate).getTime() : 0
+          // 開始日が同じ場合は、サーベイIDの降順でソート
+          if (aStart === bStart) {
+            return b[0] - a[0]
+          }
+          return bStart - aStart
         })
 
-        if (completedSurveys.length === 0) {
-          setLatestOrgScore(null)
-          setLatestOrgParticipantCount(0)
-          setLatestSurveyId(null)
-          return
-        }
-
-        // endDate の降順（最新完了サーベイが先頭）
-        completedSurveys.sort((a, b) => {
-          const aEnd = a[1].endDate ? new Date(a[1].endDate).getTime() : 0
-          const bEnd = b[1].endDate ? new Date(b[1].endDate).getTime() : 0
-          return bEnd - aEnd
-        })
-
-        const latestSurveyIdNum = completedSurveys[0][0]
-        const latest = completedSurveys[0][1]
+        const latestSurveyIdNum = sortedSurveys[0][0]
+        const latest = sortedSurveys[0][1]
         const latestSummaries = latest.summaries || []
 
         if (!latestSummaries.length) {
           setLatestOrgScore(null)
           setLatestOrgParticipantCount(0)
           setLatestSurveyId(null)
+          setLatestOrgSurveyDisplayName(null)
+          setLatestOrgSurveyPeriod(null)
           return
         }
 
@@ -1263,11 +1323,15 @@ export default function DashboardPage() {
         setLatestOrgScore(overall)
         setLatestOrgParticipantCount(latestSummaries.length)
         setLatestSurveyId(String(latestSurveyIdNum))
+        setLatestOrgSurveyDisplayName(latest.surveyName || `サーベイ ${latestSurveyIdNum}`)
+        setLatestOrgSurveyPeriod(formatSurveyPeriod(latest.startDate, latest.endDate))
       } catch (error) {
         console.error("Failed to load latest organizational survey score:", error)
         setLatestOrgScore(null)
         setLatestOrgParticipantCount(0)
         setLatestSurveyId(null)
+        setLatestOrgSurveyDisplayName(null)
+        setLatestOrgSurveyPeriod(null)
       }
     }
 
@@ -2168,7 +2232,26 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-4 sm:gap-6">
                   {/* Current organizational survey */}
                   <div className="space-y-2">
-                    <div className="text-xs sm:text-sm text-muted-foreground">現在のソシキサーベイ結果</div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="text-xs sm:text-sm text-muted-foreground">現在のソシキサーベイ結果</div>
+                      {(currentOrgSurveyDisplayName || currentOrgSurveyPeriod) && (
+                        <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                          {currentOrgSurveyDisplayName && currentOrgSurveyPeriod ? (
+                            <span className="truncate block" title={`${currentOrgSurveyDisplayName}（${currentOrgSurveyPeriod}）`}>
+                              {currentOrgSurveyDisplayName}（{currentOrgSurveyPeriod}）
+                            </span>
+                          ) : currentOrgSurveyDisplayName ? (
+                            <span className="truncate block" title={currentOrgSurveyDisplayName}>
+                              {currentOrgSurveyDisplayName}
+                            </span>
+                          ) : currentOrgSurveyPeriod ? (
+                            <span className="truncate block" title={currentOrgSurveyPeriod}>
+                              {currentOrgSurveyPeriod}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
                     {orgScoreLoading ? (
                       <div className="text-sm text-muted-foreground">読み込み中です…</div>
                     ) : currentOrgScore === null ? (
@@ -2192,6 +2275,7 @@ export default function DashboardPage() {
                               variant="outline"
                               size="sm"
                               onClick={async () => {
+                                setDetailsDialogSurveyType('current')
                                 setShowDetailsDialog(true)
                                 setDetailsLoading(true)
                                 try {
@@ -2223,7 +2307,26 @@ export default function DashboardPage() {
 
                   {/* Latest completed organizational survey */}
                   <div className="space-y-2 border-t border-border pt-3">
-                    <div className="text-xs sm:text-sm text-muted-foreground">最新のソシキサーベイ結果（完了分）</div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="text-xs sm:text-sm text-muted-foreground">最新のソシキサーベイ結果（完了分）</div>
+                      {(latestOrgSurveyDisplayName || latestOrgSurveyPeriod) && (
+                        <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                          {latestOrgSurveyDisplayName && latestOrgSurveyPeriod ? (
+                            <span className="truncate block" title={`${latestOrgSurveyDisplayName}（${latestOrgSurveyPeriod}）`}>
+                              {latestOrgSurveyDisplayName}（{latestOrgSurveyPeriod}）
+                            </span>
+                          ) : latestOrgSurveyDisplayName ? (
+                            <span className="truncate block" title={latestOrgSurveyDisplayName}>
+                              {latestOrgSurveyDisplayName}
+                            </span>
+                          ) : latestOrgSurveyPeriod ? (
+                            <span className="truncate block" title={latestOrgSurveyPeriod}>
+                              {latestOrgSurveyPeriod}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
                     {latestOrgScore === null ? (
                       <div className="text-sm text-muted-foreground">
                         過去のソシキサーベイ結果がありません。
@@ -2247,6 +2350,7 @@ export default function DashboardPage() {
                               variant="outline"
                               size="sm"
                               onClick={async () => {
+                                setDetailsDialogSurveyType('latest')
                                 setShowDetailsDialog(true)
                                 setDetailsLoading(true)
                                 try {
@@ -2784,10 +2888,20 @@ export default function DashboardPage() {
       </div>
 
       {/* 個別スコア詳細ダイアログ */}
-      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+      <Dialog 
+        open={showDetailsDialog} 
+        onOpenChange={(open) => {
+          setShowDetailsDialog(open)
+          if (!open) {
+            setDetailsDialogSurveyType(null)
+          }
+        }}
+      >
         <DialogContent className="w-[calc(100vw-0.5rem)] sm:w-[99vw] md:w-[98vw] lg:w-[97vw] xl:w-[96vw] 2xl:w-[95vw] max-w-[95vw] md:max-w-[98vw] lg:max-w-[97vw] xl:max-w-[96vw] 2xl:max-w-[95vw] h-[85vh] lg:h-[80vh] max-h-[90vh] overflow-hidden flex flex-col p-3 md:p-4">
           <DialogHeader className="pb-2 flex-shrink-0">
-            <DialogTitle className="text-base md:text-lg">現在のソシキサーベイ結果 - 個別スコア</DialogTitle>
+            <DialogTitle className="text-base md:text-lg">
+              {detailsDialogSurveyType === 'latest' ? '最新のソシキサーベイ結果 - 個別スコア' : '現在のソシキサーベイ結果 - 個別スコア'}
+            </DialogTitle>
             {currentSurveyName && (
               <div className="mt-1 text-xs md:text-sm font-medium text-foreground">
                 サーベイ名: {currentSurveyName}
@@ -2870,7 +2984,7 @@ export default function DashboardPage() {
                       className="text-[10px] md:text-xs whitespace-nowrap w-[60px] md:w-[6%] px-1 md:px-0.5 py-1.5 cursor-pointer hover:bg-muted/50 text-center"
                       onClick={() => handleSort('category2Score')}
                     >
-                      免責意識 <DetailsSortIcon columnKey="category2Score" />
+                      変化意識 <DetailsSortIcon columnKey="category2Score" />
                     </TableHead>
                     <TableHead 
                       className="text-[10px] md:text-xs whitespace-nowrap w-[70px] md:w-[7%] px-1 md:px-0.5 py-1.5 cursor-pointer hover:bg-muted/50 text-center"
@@ -2883,6 +2997,12 @@ export default function DashboardPage() {
                       onClick={() => handleSort('category6Score')}
                     >
                       時感覚 <DetailsSortIcon columnKey="category6Score" />
+                    </TableHead>
+                    <TableHead 
+                      className="text-[10px] md:text-xs whitespace-nowrap w-[60px] md:w-[6%] px-1 md:px-0.5 py-1.5 cursor-pointer hover:bg-muted/50 text-center"
+                      onClick={() => handleSort('category8Score')}
+                    >
+                      免責意識 <DetailsSortIcon columnKey="category8Score" />
                     </TableHead>
                     <TableHead 
                       className="text-[10px] md:text-xs whitespace-nowrap w-[65px] md:w-[7%] px-1 md:px-0.5 py-1.5 cursor-pointer hover:bg-muted/50 text-center"
@@ -2923,6 +3043,7 @@ export default function DashboardPage() {
                         <TableCell className={`text-[10px] md:text-xs px-1 md:px-0.5 py-1.5 text-center font-medium ${getScoreColorClass(detail.category2Score)}`}>{detail.category2Score.toFixed(1)}</TableCell>
                         <TableCell className={`text-[10px] md:text-xs px-1 md:px-0.5 py-1.5 text-center font-medium ${getScoreColorClass(detail.category4Score)}`}>{detail.category4Score.toFixed(1)}</TableCell>
                         <TableCell className={`text-[10px] md:text-xs px-1 md:px-0.5 py-1.5 text-center font-medium ${getScoreColorClass(detail.category6Score)}`}>{detail.category6Score.toFixed(1)}</TableCell>
+                        <TableCell className={`text-[10px] md:text-xs px-1 md:px-0.5 py-1.5 text-center font-medium ${getScoreColorClass(detail.category8Score)}`}>{detail.category8Score.toFixed(1)}</TableCell>
                         <TableCell className={`text-[10px] md:text-xs font-medium px-1 md:px-0.5 py-1.5 text-center ${getScoreColorClass(detail.totalScore)}`}>{detail.totalScore.toFixed(1)}</TableCell>
                         <TableCell className="text-[10px] md:text-xs px-1 md:px-0.5 py-1.5 text-center">{detail.responseRate !== null ? `${detail.responseRate.toFixed(1)}%` : "-"}</TableCell>
                       </TableRow>

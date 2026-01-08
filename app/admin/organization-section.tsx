@@ -29,17 +29,20 @@ export function OrganizationSection() {
   const [isAddDeptOpen, setIsAddDeptOpen] = useState(false)
   const [editingDept, setEditingDept] = useState<any>(null)
   const [newDept, setNewDept] = useState({ name: "", code: "", description: "", parentId: null as string | null })
+  const [deleteDeptConfirm, setDeleteDeptConfirm] = useState<{ open: boolean; deptId: string | null; deptName: string | null }>({ open: false, deptId: null, deptName: null })
 
   // Jobs
   const [jobs, setJobs] = useState<any[]>([])
   const [isAddJobOpen, setIsAddJobOpen] = useState(false)
   const [editingJob, setEditingJob] = useState<any>(null)
   const [newJob, setNewJob] = useState({ name: "", code: "", description: "" })
+  const [deleteJobConfirm, setDeleteJobConfirm] = useState<{ open: boolean; jobId: string | null; jobName: string | null }>({ open: false, jobId: null, jobName: null })
 
   // Employees
   const [employees, setEmployees] = useState<any[]>([])
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<any>(null)
+  const [deleteEmployeeConfirm, setDeleteEmployeeConfirm] = useState<{ open: boolean; employeeId: string | null; employeeName: string | null }>({ open: false, employeeId: null, employeeName: null })
   const xlsxInputRef = useRef<HTMLInputElement | null>(null)
   const [employeeSortConfig, setEmployeeSortConfig] = useState<{
     key: 'departmentCode' | 'name' | 'departmentName' | 'jobName' | 'yearsOfService' | 'role'
@@ -166,10 +169,17 @@ export function OrganizationSection() {
   }
 
   const handleDeleteDepartment = async (deptId: string) => {
+    const dept = departments.find((d) => d.id === deptId)
+    setDeleteDeptConfirm({ open: true, deptId, deptName: dept?.name || null })
+  }
+
+  const confirmDeleteDepartment = async () => {
+    if (!deleteDeptConfirm.deptId) return
+    
     toast.info("部門を削除しています…")
     try {
       // Cookies are automatically sent with requests
-      const response = await fetch(`/api/departments/${deptId}`, {
+      const response = await fetch(`/api/departments/${deleteDeptConfirm.deptId}`, {
         method: "DELETE",
       })
 
@@ -177,13 +187,16 @@ export function OrganizationSection() {
 
       if (!response.ok) {
         toast.error(data.error || "部門の削除に失敗しました")
+        setDeleteDeptConfirm({ open: false, deptId: null, deptName: null })
         return
       }
 
       await fetchDepartments()
       toast.success("部門を削除しました")
+      setDeleteDeptConfirm({ open: false, deptId: null, deptName: null })
     } catch (error) {
             toast.error("部門の削除に失敗しました")
+      setDeleteDeptConfirm({ open: false, deptId: null, deptName: null })
     }
   }
 
@@ -280,10 +293,17 @@ export function OrganizationSection() {
   }
 
   const handleDeleteJob = async (jobId: string) => {
+    const job = jobs.find((j) => j.id === jobId)
+    setDeleteJobConfirm({ open: true, jobId, jobName: job?.name || null })
+  }
+
+  const confirmDeleteJob = async () => {
+    if (!deleteJobConfirm.jobId) return
+    
     toast.info("職位を削除しています…")
     try {
       // Cookies are automatically sent with requests
-      const response = await fetch(`/api/jobs/${jobId}`, {
+      const response = await fetch(`/api/jobs/${deleteJobConfirm.jobId}`, {
         method: "DELETE",
       })
 
@@ -291,13 +311,16 @@ export function OrganizationSection() {
 
       if (!response.ok) {
         toast.error(data.error || "職位の削除に失敗しました")
+        setDeleteJobConfirm({ open: false, jobId: null, jobName: null })
         return
       }
 
       await fetchJobs()
       toast.success("職位を削除しました")
+      setDeleteJobConfirm({ open: false, jobId: null, jobName: null })
     } catch (error) {
             toast.error("職位の削除に失敗しました")
+      setDeleteJobConfirm({ open: false, jobId: null, jobName: null })
     }
   }
 
@@ -726,10 +749,17 @@ const EMPLOYEE_HEADERS = [
   }
 
   const handleDeleteEmployee = async (employeeId: string) => {
+    const employee = employees.find((e) => e.id === employeeId)
+    setDeleteEmployeeConfirm({ open: true, employeeId, employeeName: employee?.name || null })
+  }
+
+  const confirmDeleteEmployee = async () => {
+    if (!deleteEmployeeConfirm.employeeId) return
+    
     toast.info("従業員を削除しています…")
     try {
       // Cookies are automatically sent with requests
-      const response = await fetch(`/api/employees/${employeeId}`, {
+      const response = await fetch(`/api/employees/${deleteEmployeeConfirm.employeeId}`, {
         method: "DELETE",
       })
 
@@ -737,13 +767,16 @@ const EMPLOYEE_HEADERS = [
 
       if (!response.ok) {
         toast.error(data.error || "従業員の削除に失敗しました")
+        setDeleteEmployeeConfirm({ open: false, employeeId: null, employeeName: null })
         return
       }
 
       await fetchEmployees()
       toast.success("従業員を削除しました")
+      setDeleteEmployeeConfirm({ open: false, employeeId: null, employeeName: null })
     } catch (error) {
             toast.error("従業員の削除に失敗しました")
+      setDeleteEmployeeConfirm({ open: false, employeeId: null, employeeName: null })
     }
   }
 
@@ -1551,6 +1584,66 @@ const EMPLOYEE_HEADERS = [
       </Dialog>
 
       {/* 旧パスワード変更ダイアログは仕様変更により削除済み */}
+
+      {/* Delete Department Confirmation Dialog */}
+      <Dialog open={deleteDeptConfirm.open} onOpenChange={(open) => setDeleteDeptConfirm({ open, deptId: null, deptName: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>部門の削除</DialogTitle>
+            <DialogDescription>
+              「{deleteDeptConfirm.deptName}」を削除してもよろしいですか？この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDeptConfirm({ open: false, deptId: null, deptName: null })}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteDepartment}>
+              削除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Job Confirmation Dialog */}
+      <Dialog open={deleteJobConfirm.open} onOpenChange={(open) => setDeleteJobConfirm({ open, jobId: null, jobName: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>職位の削除</DialogTitle>
+            <DialogDescription>
+              「{deleteJobConfirm.jobName}」を削除してもよろしいですか？この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteJobConfirm({ open: false, jobId: null, jobName: null })}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteJob}>
+              削除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Employee Confirmation Dialog */}
+      <Dialog open={deleteEmployeeConfirm.open} onOpenChange={(open) => setDeleteEmployeeConfirm({ open, employeeId: null, employeeName: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>従業員の削除</DialogTitle>
+            <DialogDescription>
+              「{deleteEmployeeConfirm.employeeName}」を削除してもよろしいですか？この操作は取り消せません。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteEmployeeConfirm({ open: false, employeeId: null, employeeName: null })}>
+              キャンセル
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteEmployee}>
+              削除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Tabs>
   )
 }

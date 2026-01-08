@@ -78,7 +78,7 @@ async function handlePost(request: NextRequest, user: AdminUser) {
 
     const runningColumn = hasRunning ? ', running' : ''
     const displayColumn = hasDisplay ? ', display' : ''
-    const runningValue = hasRunning ? ', true' : ''
+    const runningValue = hasRunning ? ', false' : ''
     const displayValue = hasDisplay ? ', true' : ''
     const runningSelect = hasRunning ? ', running' : ', true as running'
     const displaySelect = hasDisplay ? ', display' : ', true as display'
@@ -108,7 +108,7 @@ async function handlePost(request: NextRequest, user: AdminUser) {
         endDate: survey.end_date,
         status: survey.status as 'active' | 'completed' | 'draft',
         surveyType: normalizeSurveyType(survey.survey_type) as 'organizational' | 'growth',
-        running: (survey as any).running !== undefined ? Boolean((survey as any).running) : true,
+        running: (survey as any).running !== undefined ? Boolean((survey as any).running) : false,
         display: (survey as any).display !== undefined ? Boolean((survey as any).display) : true,
         createdAt: survey.created_at,
       },
