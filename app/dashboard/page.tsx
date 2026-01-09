@@ -2867,7 +2867,7 @@ export default function DashboardPage() {
                           borderRadius: "6px",
                           fontSize: "12px",
                         }}
-                        formatter={(value: number) => [`スコア：${value}`, ""]}
+                        formatter={(value: number | undefined) => [`スコア：${value ?? 0}`, ""]}
                       />
                       <Line
                         type="monotone"
