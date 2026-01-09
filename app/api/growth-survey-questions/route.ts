@@ -69,9 +69,10 @@ async function handlePost(request: NextRequest, user: { userId: number }) {
     const finalQuestionType = questionType || 'single_choice'
     const finalCategory = finalQuestionType === 'free_text' ? null : (category?.trim() || null)
     // Handle weight: preserve 0, null for empty, and parse numeric values
+    // Note: weight is already validated as number | null | undefined by the schema
     const finalWeight = finalQuestionType === 'free_text' 
       ? null 
-      : (weight === null || weight === undefined || weight === '') 
+      : (weight === null || weight === undefined) 
         ? null 
         : parseFloat(String(weight))
 
