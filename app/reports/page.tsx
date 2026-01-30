@@ -433,7 +433,7 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <CardTitle>トレンド分析</CardTitle>
-                    <CardDescription>過去のスコア推移と傾向分析</CardDescription>
+                    <CardDescription>過去のソシキサーベイスコア推移と傾向分析</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {historicalData.length === 0 ? (

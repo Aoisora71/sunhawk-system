@@ -2400,7 +2400,7 @@ export default function DashboardPage() {
               <Card className="overflow-hidden">
                 <CardHeader className="pb-2 sm:pb-3 md:pb-4">
                   <div className="flex items-center justify-between">
-                  <CardTitle className="text-base sm:text-lg md:text-xl">カテゴリ別評価</CardTitle>
+                  <CardTitle className="text-base sm:text-lg md:text-xl">ソシキサーベイカテゴリ別評価</CardTitle>
                     <Button
                       variant="outline"
                       size="sm"
@@ -2461,7 +2461,7 @@ export default function DashboardPage() {
               <Card className="overflow-hidden">
                 <CardHeader className="pb-2 sm:pb-3 md:pb-4">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base sm:text-lg md:text-xl">部門別スコア</CardTitle>
+                    <CardTitle className="text-base sm:text-lg md:text-xl">ソシキサーベイ部門別スコア</CardTitle>
                     {radarCurrentSurveyId && (
                       <Button
                         variant="outline"
@@ -2808,8 +2808,8 @@ export default function DashboardPage() {
               <CardHeader className="pb-2 sm:pb-3 md:pb-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-base sm:text-lg md:text-xl">スコア推移</CardTitle>
-                    <CardDescription className="text-xs sm:text-sm">過去6ヶ月間の総合スコアの変化</CardDescription>
+                    <CardTitle className="text-base sm:text-lg md:text-xl">ソシキサーベイスコア推移</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">過去6ヶ月間のソシキサベイ総合スコアの変化</CardDescription>
                   </div>
                   <Button
                     variant="outline"
