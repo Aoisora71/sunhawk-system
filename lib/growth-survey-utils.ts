@@ -7,6 +7,16 @@ export interface GrowthSurveyOption {
   score: number | null
 }
 
+/**
+ * Check if an answer text looks like a placeholder (e.g., "pro1", "pro2", "option1", etc.)
+ */
+function isPlaceholderText(text: string): boolean {
+  if (!text || typeof text !== "string") return true
+  // Match patterns like "pro1", "pro2", "option1", "opt1", "ans1", etc.
+  const placeholderPattern = /^(pro|option|opt|ans|answer|choice|ch|q|a)\d+$/i
+  return placeholderPattern.test(text.trim())
+}
+
 export function getGrowthSurveyOptions(question: GrowthSurveyQuestion): GrowthSurveyOption[] {
   if (!question) return []
 
@@ -15,6 +25,23 @@ export function getGrowthSurveyOptions(question: GrowthSurveyQuestion): GrowthSu
   }
 
   if (Array.isArray(question.answers) && question.answers.length > 0) {
+    // Check if any answer text looks like a placeholder
+    const hasPlaceholderAnswers = question.answers.some((answer) => isPlaceholderText(answer.text))
+
+    if (hasPlaceholderAnswers) {
+      // If answers contain placeholder text, use default options with matching scores
+      return question.answers.map((answer, index) => {
+        const score = typeof answer.score === "number" ? answer.score : answer.score === null ? null : Number(answer.score ?? 0)
+        // Find matching default option by score
+        const defaultOption = DEFAULT_GROWTH_SURVEY_SCALE_OPTIONS.find((opt) => opt.score === score)
+        return {
+          value: String(index),
+          label: defaultOption ? defaultOption.label : (score !== null ? `スコア ${score}` : "未設定"),
+          score,
+        }
+      })
+    }
+
     return question.answers.map((answer, index) => ({
       value: String(index),
       label: answer.text,

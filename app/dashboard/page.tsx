@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { ArrowUpDown, ArrowUp, ArrowDown, Search, ChevronDown, X } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -1031,19 +1032,24 @@ export default function DashboardPage() {
   const [growthCurrentParticipantCount, setGrowthCurrentParticipantCount] = useState<number>(0)
   const [growthPreviousParticipantCount, setGrowthPreviousParticipantCount] = useState<number>(0)
   const [showGrowthQuestionResponsesDialog, setShowGrowthQuestionResponsesDialog] = useState<boolean>(false)
-  const [growthQuestionResponsesLoading, setGrowthQuestionResponsesLoading] = useState<boolean>(false)
-  const [growthQuestionResponsesData, setGrowthQuestionResponsesData] = useState<Array<{
-    questionId: number
-    questionText: string
-    category: string | null
-    options: Array<{
-      label: string
-      score: number | null
-      count: number
+  const [growthDetailedLoading, setGrowthDetailedLoading] = useState<boolean>(false)
+  const [selectedGrowthSurveyIds, setSelectedGrowthSurveyIds] = useState<number[]>([])
+  const [selectedGrowthDepartmentIds, setSelectedGrowthDepartmentIds] = useState<number[]>([])
+  const [selectedGrowthJobIds, setSelectedGrowthJobIds] = useState<number[]>([])
+  const [growthDetailedData, setGrowthDetailedData] = useState<{
+    questions: Array<{ id: number; questionText: string; questionType: string; answersTexts: string[] }>
+    surveys: Array<{ id: number; name: string }>
+    rows: Array<{
+      rowNumber: number
+      employeeId: number
+      employeeName: string
+      departmentName: string
+      jobName: string
+      surveyId: number
+      surveyName: string
+      answers: Record<number, string>
     }>
-    totalRespondents: number
-  }>>([])
-  const [selectedGrowthSurveyId, setSelectedGrowthSurveyId] = useState<string | null>(null)
+  } | null>(null)
   const [availableGrowthSurveys, setAvailableGrowthSurveys] = useState<Array<{ id: number; name: string; startDate: string | null; endDate: string | null }>>([])
   const [employees, setEmployees] = useState<User[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
@@ -1949,13 +1955,13 @@ export default function DashboardPage() {
             return Number(b.id) - Number(a.id)
           })
 
-        // Fallback scores (0 when no surveys exist - no bonus points)
-        const fallbackCategories = {
+        // Fallback: 0 for growth categories; ソシキサーベイ null when no matching org survey
+        const fallbackCategories: Record<string, number | null> = {
           "ルール": 0,
           "組織体制": 0,
           "評価制度": 0,
           "週報・会議": 0,
-          "識学サーベイ": 1.5, // This is calculated from organizational survey, not from growth survey
+          "ソシキサーベイ": null,
         }
 
         // Get all display = true surveys (already filtered above)
@@ -2050,27 +2056,26 @@ export default function DashboardPage() {
           { name: "組織体制" },
           { name: "評価制度" },
           { name: "週報・会議" },
-          { name: "識学サーベイ" },
+          { name: "ソシキサーベイ" },
         ]
 
-        // Build data structure with all display surveys
+        // Build data structure with all display surveys (ソシキサーベイ can be null when no matching org survey)
         const data = categories.map((cat) => {
           const result: any = {
             category: cat.name,
             fullMark: 6, // Maximum score is 6
           }
-          
-          // Add data for each display survey
           displaySurveys.forEach((survey, index) => {
             const surveyId = Number(survey.id)
-            const categories = surveyCategoriesMap.get(surveyId)
+            const cats = surveyCategoriesMap.get(surveyId) as Record<string, number | null> | undefined
             const key = index === 0 ? 'current' : index === 1 ? 'previous' : `survey_${survey.id}`
-            const score = categories 
-              ? Number(((categories as any)[cat.name] || fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0).toFixed(2))
-              : fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0
-            result[key] = score
+            const raw = cats?.[cat.name] ?? fallbackCategories[cat.name]
+            if (raw == null && cat.name === "ソシキサーベイ") {
+              result[key] = null
+            } else {
+              result[key] = Number(Number(raw ?? 0).toFixed(2))
+            }
           })
-          
           return result
         })
 
@@ -2078,23 +2083,22 @@ export default function DashboardPage() {
         setOrganizationGrowthData(data)
       } catch (error) {
         console.error("Failed to load organization growth data:", error)
-        // On error, show zero scores (no bonus points)
-        const fallbackCategories = {
+        const fallbackCategories: Record<string, number | null> = {
           "ルール": 0,
           "組織体制": 0,
           "評価制度": 0,
           "週報・会議": 0,
-          "識学サーベイ": 1.5, // This is calculated from organizational survey
+          "ソシキサーベイ": null,
         }
         const errorData = [
-          { name: "ルール" },
-          { name: "組織体制" },
-          { name: "評価制度" },
-          { name: "週報・会議" },
-          { name: "識学サーベイ" },
-        ].map((cat) => ({
-          category: cat.name,
-          current: fallbackCategories[cat.name as keyof typeof fallbackCategories] || 0,
+          "ルール",
+          "組織体制",
+          "評価制度",
+          "週報・会議",
+          "ソシキサーベイ",
+        ].map((name) => ({
+          category: name,
+          current: fallbackCategories[name] ?? 0,
           previous: null,
           fullMark: 6,
         }))
@@ -2236,7 +2240,7 @@ export default function DashboardPage() {
               <CardHeader className="pb-3 sm:pb-4">
                 <CardTitle className="text-lg sm:text-xl">ソシキサーベイ総合スコア</CardTitle>
                 <CardDescription className="text-xs sm:text-sm">
-                  現在のソシキサーベイ結果と、直近に完了したソシキサーベイ結果を詳細します
+                  最新のソシキサーベイ結果と、直近に完了したソシキサーベイ結果を詳細します
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -2244,7 +2248,7 @@ export default function DashboardPage() {
                   {/* Current organizational survey */}
                   <div className="space-y-2">
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-xs sm:text-sm text-muted-foreground">現在のソシキサーベイ結果</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">最新のソシキサーベイ結果</div>
                       {(currentOrgSurveyDisplayName || currentOrgSurveyPeriod) && (
                         <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                           {currentOrgSurveyDisplayName && currentOrgSurveyPeriod ? (
@@ -2319,7 +2323,7 @@ export default function DashboardPage() {
                   {/* Latest completed organizational survey */}
                   <div className="space-y-2 border-t border-border pt-3">
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-xs sm:text-sm text-muted-foreground">最新のソシキサーベイ結果（完了分）</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">過去のソシキサーベイ結果（完了分）</div>
                       {(latestOrgSurveyDisplayName || latestOrgSurveyPeriod) && (
                         <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                           {latestOrgSurveyDisplayName && latestOrgSurveyPeriod ? (
@@ -2599,31 +2603,8 @@ export default function DashboardPage() {
                             return bEnd - aEnd
                           })
                         setAvailableGrowthSurveys(growthSurveys)
-                        
-                        // Set default to most recent survey
-                        if (growthSurveys.length > 0) {
-                          const defaultSurveyId = growthSurveys[0].id.toString()
-                          setSelectedGrowthSurveyId(defaultSurveyId)
-                          setShowGrowthQuestionResponsesDialog(true)
-                          setGrowthQuestionResponsesLoading(true)
-                          try {
-                            const response = await api.growthSurveyResponses.getQuestionResponses(defaultSurveyId)
-                            if (response?.success && response.questions) {
-                              setGrowthQuestionResponsesData(response.questions)
-                            } else {
-                              setGrowthQuestionResponsesData([])
-                            }
-                          } catch (error) {
-                            console.error("Failed to load growth question responses:", error)
-                            setGrowthQuestionResponsesData([])
-                          } finally {
-                            setGrowthQuestionResponsesLoading(false)
-                          }
-                        } else {
-                          setShowGrowthQuestionResponsesDialog(true)
-                          setSelectedGrowthSurveyId(null)
-                          setGrowthQuestionResponsesData([])
-                        }
+                        setShowGrowthQuestionResponsesDialog(true)
+                        setGrowthDetailedData(null)
                       }
                     }}
                   >
@@ -2689,116 +2670,306 @@ export default function DashboardPage() {
             </Card>
 
             {/* Growth Survey Question Responses Dialog */}
-            <Dialog 
-              open={showGrowthQuestionResponsesDialog} 
+            <Dialog
+              open={showGrowthQuestionResponsesDialog}
               onOpenChange={(open) => {
                 setShowGrowthQuestionResponsesDialog(open)
                 if (!open) {
-                  // Reset when closing
-                  setSelectedGrowthSurveyId(null)
-                  setGrowthQuestionResponsesData([])
+                  setGrowthDetailedData(null)
+                  setSelectedGrowthSurveyIds([])
+                  setSelectedGrowthDepartmentIds([])
+                  setSelectedGrowthJobIds([])
                 }
               }}
             >
-              <DialogContent className="w-[calc(100vw-0.5rem)] sm:w-[95vw] md:w-[90vw] lg:w-[85vw] xl:w-[80vw] max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-3 sm:p-4 md:p-6">
+              <DialogContent className="w-[calc(100vw-0.5rem)] sm:w-[99vw] md:w-[98vw] lg:w-[97vw] xl:w-[96vw] max-w-[95vw] md:max-w-[98vw] h-[88vh] md:h-[90vh] max-h-[95vh] overflow-hidden flex flex-col p-3 md:p-4">
                 <DialogHeader className="pb-2 flex-shrink-0">
-                  <DialogTitle className="text-base sm:text-lg md:text-xl">グロースサーベイ回答状況</DialogTitle>
-                  <DialogDescription className="text-xs sm:text-sm mt-1">
-                    各問題に対する回答状況を確認できます
+                  <DialogTitle className="text-base md:text-lg">グロースサーベイ回答状況</DialogTitle>
+                  <DialogDescription className="text-xs mt-1">
+                    サーベイ・部門・職位で絞り込み、各メンバーの全問題への回答を表示
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex-shrink-0 mb-3">
-                  <div className="space-y-2">
-                    <Label className="text-sm">成長サーベイ</Label>
-                    <Select
-                      value={selectedGrowthSurveyId || ""}
-                      onValueChange={async (value) => {
-                        setSelectedGrowthSurveyId(value)
-                        setGrowthQuestionResponsesLoading(true)
+                <div className="flex-1 overflow-y-auto min-h-0 space-y-4 mt-2">
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-semibold">フィルター条件</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-sm">サーベイ（複数選択）</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between text-sm h-9 sm:h-10">
+                              <span className="truncate flex-1 text-left">
+                                {selectedGrowthSurveyIds.length === 0 ? "サーベイを選択" : `${selectedGrowthSurveyIds.length}個選択中`}
+                              </span>
+                              <ChevronDown className="h-4 w-4 opacity-50 ml-2 flex-shrink-0" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 !z-[110]" align="start">
+                            <div className="p-2 max-h-60 overflow-y-auto space-y-1">
+                              {availableGrowthSurveys.map((s) => (
+                                <div
+                                  key={s.id}
+                                  className="flex items-center space-x-2 p-2 hover:bg-muted rounded-sm cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedGrowthSurveyIds((prev) =>
+                                      prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                                    )
+                                  }}
+                                >
+                                  <Checkbox
+                                    checked={selectedGrowthSurveyIds.includes(s.id)}
+                                    onCheckedChange={(c) => {
+                                      if (c) setSelectedGrowthSurveyIds((prev) => [...prev, s.id])
+                                      else setSelectedGrowthSurveyIds((prev) => prev.filter((id) => id !== s.id))
+                                    }}
+                                  />
+                                  <Label className="flex-1 cursor-pointer text-sm truncate">{s.name}</Label>
+                                </div>
+                              ))}
+                            </div>
+                            {selectedGrowthSurveyIds.length > 0 && (
+                              <div className="border-t p-2">
+                                <Button variant="ghost" size="sm" className="w-full text-sm" onClick={() => setSelectedGrowthSurveyIds([])}>
+                                  すべてクリア
+                                </Button>
+                              </div>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        {selectedGrowthSurveyIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {selectedGrowthSurveyIds.map((id) => {
+                              const s = availableGrowthSurveys.find((x) => x.id === id)
+                              return s ? (
+                                <Badge key={id} variant="secondary" className="text-xs cursor-pointer" onClick={() => setSelectedGrowthSurveyIds((prev) => prev.filter((x) => x !== id))}>
+                                  <span className="truncate max-w-[100px]">{s.name}</span>
+                                  <X className="h-3 w-3 ml-1" />
+                                </Badge>
+                              ) : null
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm">部門（複数選択）</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between text-sm h-9 sm:h-10">
+                              <span className="truncate flex-1 text-left">
+                                {selectedGrowthDepartmentIds.length === 0 ? "部門を選択" : `${selectedGrowthDepartmentIds.length}個選択中`}
+                              </span>
+                              <ChevronDown className="h-4 w-4 opacity-50 ml-2 flex-shrink-0" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 !z-[110]" align="start">
+                            <div className="p-2 max-h-60 overflow-y-auto space-y-1">
+                              {departmentsForAnalysis.map((d) => (
+                                <div
+                                  key={d.id}
+                                  className="flex items-center space-x-2 p-2 hover:bg-muted rounded-sm cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedGrowthDepartmentIds((prev) =>
+                                      prev.includes(d.id) ? prev.filter((id) => id !== d.id) : [...prev, d.id]
+                                    )
+                                  }}
+                                >
+                                  <Checkbox
+                                    checked={selectedGrowthDepartmentIds.includes(d.id)}
+                                    onCheckedChange={(c) => {
+                                      if (c) setSelectedGrowthDepartmentIds((prev) => [...prev, d.id])
+                                      else setSelectedGrowthDepartmentIds((prev) => prev.filter((id) => id !== d.id))
+                                    }}
+                                  />
+                                  <Label className="flex-1 cursor-pointer text-sm">{d.name}</Label>
+                                </div>
+                              ))}
+                            </div>
+                            {selectedGrowthDepartmentIds.length > 0 && (
+                              <div className="border-t p-2">
+                                <Button variant="ghost" size="sm" className="w-full text-sm" onClick={() => setSelectedGrowthDepartmentIds([])}>すべてクリア</Button>
+                              </div>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        {selectedGrowthDepartmentIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {selectedGrowthDepartmentIds.map((id) => {
+                              const d = departmentsForAnalysis.find((x) => x.id === id)
+                              return d ? (
+                                <Badge key={id} variant="secondary" className="text-xs cursor-pointer" onClick={() => setSelectedGrowthDepartmentIds((prev) => prev.filter((x) => x !== id))}>
+                                  {d.name}
+                                  <X className="h-3 w-3 ml-1" />
+                                </Badge>
+                              ) : null
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm">職位（複数選択）</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between text-sm h-9 sm:h-10">
+                              <span className="truncate flex-1 text-left">
+                                {selectedGrowthJobIds.length === 0 ? "職位を選択" : `${selectedGrowthJobIds.length}個選択中`}
+                              </span>
+                              <ChevronDown className="h-4 w-4 opacity-50 ml-2 flex-shrink-0" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 !z-[110]" align="start">
+                            <div className="p-2 max-h-60 overflow-y-auto space-y-1">
+                              {availableJobs.map((j) => (
+                                <div
+                                  key={j.id}
+                                  className="flex items-center space-x-2 p-2 hover:bg-muted rounded-sm cursor-pointer"
+                                  onClick={() => {
+                                    setSelectedGrowthJobIds((prev) =>
+                                      prev.includes(j.id) ? prev.filter((id) => id !== j.id) : [...prev, j.id]
+                                    )
+                                  }}
+                                >
+                                  <Checkbox
+                                    checked={selectedGrowthJobIds.includes(j.id)}
+                                    onCheckedChange={(c) => {
+                                      if (c) setSelectedGrowthJobIds((prev) => [...prev, j.id])
+                                      else setSelectedGrowthJobIds((prev) => prev.filter((id) => id !== j.id))
+                                    }}
+                                  />
+                                  <Label className="flex-1 cursor-pointer text-sm">{j.name}</Label>
+                                </div>
+                              ))}
+                            </div>
+                            {selectedGrowthJobIds.length > 0 && (
+                              <div className="border-t p-2">
+                                <Button variant="ghost" size="sm" className="w-full text-sm" onClick={() => setSelectedGrowthJobIds([])}>すべてクリア</Button>
+                              </div>
+                            )}
+                          </PopoverContent>
+                        </Popover>
+                        {selectedGrowthJobIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {selectedGrowthJobIds.map((id) => {
+                              const j = availableJobs.find((x) => x.id === id)
+                              return j ? (
+                                <Badge key={id} variant="secondary" className="text-xs cursor-pointer" onClick={() => setSelectedGrowthJobIds((prev) => prev.filter((x) => x !== id))}>
+                                  {j.name}
+                                  <X className="h-3 w-3 ml-1" />
+                                </Badge>
+                              ) : null
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={async () => {
+                        if (selectedGrowthSurveyIds.length === 0) return
+                        setGrowthDetailedLoading(true)
                         try {
-                          const response = await api.growthSurveyResponses.getQuestionResponses(value)
-                          if (response?.success && response.questions) {
-                            setGrowthQuestionResponsesData(response.questions)
+                          const res = await api.growthSurveyResponses.getDetailedResponses(
+                            selectedGrowthSurveyIds.map(String),
+                            selectedGrowthDepartmentIds.map(String),
+                            selectedGrowthJobIds.map(String),
+                          )
+                          if (res?.success && res.questions && res.rows) {
+                            setGrowthDetailedData({
+                              questions: res.questions,
+                              surveys: res.surveys,
+                              rows: res.rows,
+                            })
                           } else {
-                            setGrowthQuestionResponsesData([])
+                            setGrowthDetailedData(null)
                           }
-                        } catch (error) {
-                          console.error("Failed to load growth question responses:", error)
-                          setGrowthQuestionResponsesData([])
+                        } catch (e) {
+                          console.error("Failed to load growth detailed responses:", e)
+                          setGrowthDetailedData(null)
                         } finally {
-                          setGrowthQuestionResponsesLoading(false)
+                          setGrowthDetailedLoading(false)
                         }
                       }}
+                      disabled={selectedGrowthSurveyIds.length === 0 || growthDetailedLoading}
+                      className="min-w-32"
                     >
-                      <SelectTrigger className="w-full text-sm h-9 sm:h-10">
-                        <SelectValue placeholder="成長サーベイを選択" />
-                      </SelectTrigger>
-                      <SelectContent className="!z-[110]">
-                        {availableGrowthSurveys.map((survey) => (
-                          <SelectItem key={survey.id} value={survey.id.toString()}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{survey.name}</span>
-                              {survey.endDate && (
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(survey.endDate).toLocaleDateString("ja-JP")}
-                                </span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {growthDetailedLoading ? "読み込み中..." : "表示"}
+                    </Button>
                   </div>
-                </div>
-                <div className="flex-1 overflow-y-auto min-h-0">
-                {growthQuestionResponsesLoading ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm sm:text-base">読み込み中です…</div>
-                ) : growthQuestionResponsesData.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm sm:text-base">回答データがありません</div>
-                ) : (
-                    <div className="space-y-4 sm:space-y-6">
-                    {growthQuestionResponsesData.map((question) => (
-                      <Card key={question.questionId}>
-                          <CardHeader className="pb-2 sm:pb-3">
-                            <CardTitle className="text-sm sm:text-base md:text-lg break-words">
-                            {question.questionText}
-                          </CardTitle>
-                          {question.category && (
-                              <CardDescription className="text-xs sm:text-sm">カテゴリ: {question.category}</CardDescription>
-                          )}
-                            <CardDescription className="text-xs sm:text-sm">回答者数: {question.totalRespondents}名</CardDescription>
-                        </CardHeader>
-                          <CardContent className="p-3 sm:p-4 md:p-6">
-                            <div className="overflow-x-auto -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                    <TableHead className="w-[50%] sm:w-[60%] text-xs sm:text-sm">回答</TableHead>
-                                    <TableHead className="text-center text-xs sm:text-sm">選択人数</TableHead>
-                                    <TableHead className="text-center text-xs sm:text-sm">割合</TableHead>
+                  {growthDetailedData && growthDetailedData.questions.length > 0 && (
+                    <div className="border rounded-md overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">番号</TableHead>
+                              <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">名前</TableHead>
+                              <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">部門</TableHead>
+                              <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">職位</TableHead>
+                              <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">サーベイ</TableHead>
+                              {growthDetailedData.questions.map((q) => (
+                                <TableHead key={q.id} className="whitespace-nowrap px-2 py-2 text-xs font-medium max-w-[120px]">
+                                  <TooltipProvider>
+                                    <UITooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="cursor-help truncate block max-w-[80px]">
+                                          {q.questionText ? (q.questionText.length > 10 ? q.questionText.slice(0, 10) + "…" : q.questionText) : ""}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className="max-w-[400px] whitespace-pre-wrap">
+                                        {q.questionText}
+                                      </TooltipContent>
+                                    </UITooltip>
+                                  </TooltipProvider>
+                                </TableHead>
+                              ))}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {growthDetailedData.rows.map((row) => (
+                              <TableRow key={`${row.employeeId}-${row.surveyId}`}>
+                                <TableCell className="px-2 py-2 text-xs font-medium">{row.rowNumber}</TableCell>
+                                <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.employeeName}</TableCell>
+                                <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.departmentName}</TableCell>
+                                <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.jobName}</TableCell>
+                                <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.surveyName}</TableCell>
+                                {growthDetailedData.questions.map((q) => {
+                                  const answer = row.answers[q.id] ?? ""
+                                  const displayAnswer = answer || "-"
+                                  const needsTooltip = displayAnswer.length > 60
+                                  return (
+                                    <TableCell key={q.id} className="px-2 py-2 text-xs max-w-[200px] break-words align-top">
+                                      {needsTooltip ? (
+                                        <TooltipProvider>
+                                          <UITooltip>
+                                            <TooltipTrigger asChild>
+                                              <span className="cursor-help block">
+                                                {displayAnswer}
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[400px] whitespace-pre-wrap">
+                                              {displayAnswer}
+                                            </TooltipContent>
+                                          </UITooltip>
+                                        </TooltipProvider>
+                                      ) : (
+                                        <span>{displayAnswer}</span>
+                                      )}
+                                    </TableCell>
+                                  )
+                                })}
                               </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {question.options.map((option, index) => {
-                                const percentage = question.totalRespondents > 0
-                                  ? ((option.count / question.totalRespondents) * 100).toFixed(1)
-                                  : '0.0'
-                                return (
-                                  <TableRow key={index}>
-                                        <TableCell className="text-xs sm:text-sm break-words">{option.label}</TableCell>
-                                        <TableCell className="text-center font-medium text-xs sm:text-sm">{option.count}名</TableCell>
-                                        <TableCell className="text-center text-xs sm:text-sm">{percentage}%</TableCell>
-                                  </TableRow>
-                                )
-                              })}
-                            </TableBody>
-                          </Table>
-                            </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                  {growthDetailedData && growthDetailedData.questions.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-sm">問題がありません</div>
+                  )}
+                  {growthDetailedData && growthDetailedData.rows.length === 0 && growthDetailedData.questions.length > 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-sm">該当する回答がありません</div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
@@ -2982,7 +3153,7 @@ export default function DashboardPage() {
         <DialogContent className="w-[calc(100vw-0.5rem)] sm:w-[99vw] md:w-[98vw] lg:w-[97vw] xl:w-[96vw] 2xl:w-[95vw] max-w-[95vw] md:max-w-[98vw] lg:max-w-[97vw] xl:max-w-[96vw] 2xl:max-w-[95vw] h-[85vh] lg:h-[80vh] max-h-[90vh] overflow-hidden flex flex-col p-3 md:p-4">
           <DialogHeader className="pb-2 flex-shrink-0">
             <DialogTitle className="text-base md:text-lg">
-              {detailsDialogSurveyType === 'latest' ? '最新のソシキサーベイ結果 - 個別スコア' : '現在のソシキサーベイ結果 - 個別スコア'}
+              {detailsDialogSurveyType === 'latest' ? '最新のソシキサーベイ結果 - 個別スコア' : '最新のソシキサーベイ結果 - 個別スコア'}
             </DialogTitle>
             {currentSurveyName && (
               <div className="mt-1 text-xs md:text-sm font-medium text-foreground">

@@ -94,6 +94,7 @@ export async function fetchGrowthSurveyQuestions(): Promise<GrowthSurveyQuestion
     answerType: row.answer_type ?? "scale",
     questionType: (row.question_type || 'single_choice') as 'single_choice' | 'free_text',
     isActive: Boolean(row.is_active),
+    displayOrder: Number(row.display_order) || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }))

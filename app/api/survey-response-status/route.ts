@@ -5,6 +5,7 @@ import { parseFloatSafe } from "@/lib/db-helpers"
 import { successResponse, handleError, badRequestResponse } from "@/lib/api-errors"
 import type { AdminUser } from "@/lib/middleware"
 import { getAccessibleGrowthSurveyQuestionCount, getUserJobName, fetchGrowthSurveyQuestions } from "@/lib/growth-survey"
+import { getGrowthSurveyOptions } from "@/lib/growth-survey-utils"
 
 /**
  * GET /api/survey-response-status - Get employee response status for a survey
@@ -402,12 +403,149 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       }
     })
 
+    // For growth surveys, fetch detailed question responses
+    let questions: Array<{
+      id: number
+      questionText: string
+      questionType: "single_choice" | "free_text"
+      answerType: string
+      displayOrder: number
+    }> = []
+
+    if (surveyType === 'growth') {
+      // Get all active questions ordered by display_order
+      const allQuestions = await fetchGrowthSurveyQuestions()
+      questions = allQuestions
+        .filter(q => q.isActive)
+        .sort((a, b) => (a.displayOrder ?? a.id) - (b.displayOrder ?? b.id))
+        .map(q => ({
+          id: q.id,
+          questionText: q.questionText || `問題 ${q.id}`,
+          questionType: (q.questionType || 'single_choice') as 'single_choice' | 'free_text',
+          answerType: q.answerType || 'scale',
+          displayOrder: q.displayOrder ?? q.id
+        }))
+
+      console.log(`[Survey Response Status] Growth survey questions loaded: ${questions.length} questions`)
+      console.log(`[Survey Response Status] Questions:`, questions.map(q => ({ id: q.id, text: q.questionText?.substring(0, 20), type: q.questionType, answerType: q.answerType })))
+
+      // Column names for growth_survey_responses
+      const colCheck = await query<{ column_name: string }>(
+        `SELECT column_name FROM information_schema.columns
+         WHERE table_name = 'growth_survey_responses'
+           AND column_name IN ('gqid', 'question_id', 'gsid', 'survey_id')`,
+      )
+      const hasNewCols = colCheck.rows.some((r) => r.column_name === "gqid")
+      const qCol = hasNewCols ? "gqid" : "question_id"
+      const sCol = hasNewCols ? "gsid" : "survey_id"
+
+      // Get all responses for this survey
+      const detailedResponsesResult = await query<{ gqid: number; result: unknown }>(
+        `SELECT ${qCol} as gqid, result
+         FROM growth_survey_responses
+         WHERE ${sCol} = $1`,
+        [surveyId],
+      )
+
+      console.log(`[Survey Response Status] Detailed responses loaded: ${detailedResponsesResult.rows.length} rows`)
+
+      // Get free text responses
+      const freeTextResult = await query<{ uid: number; gqid: number; answer_text: string }>(
+        `SELECT uid, gqid, answer_text
+         FROM growth_survey_free_text_responses
+         WHERE gsid = $1`,
+        [surveyId],
+      )
+
+      console.log(`[Survey Response Status] Free text responses loaded: ${freeTextResult.rows.length} rows`)
+
+      // Map (userId, questionId) -> answerText
+      const answerMap = new Map<string, string>()
+
+      // Build a map of question ID to full question object for efficient lookup
+      const questionMap = new Map<number, typeof allQuestions[0]>()
+      for (const q of allQuestions) {
+        questionMap.set(q.id, q)
+      }
+
+      for (const row of detailedResponsesResult.rows) {
+        const questionId = Number(row.gqid)
+        const q = questionMap.get(questionId)
+        if (!q) {
+          console.log(`[Survey Response Status] Question not found for ID: ${questionId}`)
+          continue
+        }
+
+        let arr: Array<{ uid: number; s: number | null }> = []
+        try {
+          const raw = row.result
+          const parsed = Array.isArray(raw) ? raw : typeof raw === "string" ? JSON.parse(raw) : []
+          arr = parsed.map((e: { uid?: number; employeeId?: number; s?: number | null; score?: number | null }) => ({
+            uid: e.uid ?? e.employeeId ?? 0,
+            s: e.s ?? e.score ?? null,
+          }))
+        } catch (parseError) {
+          console.log(`[Survey Response Status] Failed to parse result for question ${questionId}:`, parseError)
+          continue
+        }
+
+        for (const entry of arr) {
+          const uid = entry.uid
+          if (!uid) continue
+          const key = `${uid}:${questionId}`
+
+          // Check if this is a free text question
+          const isFreeText = q.questionType === "free_text" || q.answerType === "text"
+
+          if (isFreeText) {
+            // Free text: will be filled from free_text table
+            if (!answerMap.has(key)) answerMap.set(key, "")
+          } else {
+            // Single choice: match score to option label
+            const options = getGrowthSurveyOptions(q)
+            if (entry.s === null) {
+              answerMap.set(key, "スキップ")
+            } else {
+              const opt = options.find((o) => o.score != null && Math.abs((o.score ?? 0) - (entry.s ?? 0)) < 0.001)
+              if (opt) {
+                answerMap.set(key, opt.label)
+              } else {
+                // If no matching option found, display the score value
+                answerMap.set(key, `スコア: ${entry.s}`)
+              }
+            }
+          }
+        }
+      }
+
+      // Fill in free text responses (overwrite any placeholders)
+      for (const row of freeTextResult.rows) {
+        const key = `${row.uid}:${row.gqid}`
+        const answerText = row.answer_text ?? ""
+        answerMap.set(key, answerText)
+      }
+
+      console.log(`[Survey Response Status] Answer map populated with ${answerMap.size} entries`)
+
+      // Add answers to each employee status
+      for (const empStatus of employeeStatuses) {
+        const answers: Record<number, string> = {}
+        for (const q of questions) {
+          const key = `${empStatus.id}:${q.id}`
+          answers[q.id] = answerMap.get(key) ?? ""
+        }
+        (empStatus as any).answers = answers
+      }
+    }
+
     return successResponse({
       employees: employeeStatuses,
       totalEmployees: employeeStatuses.length,
       respondedCount: employeeStatuses.filter((e) => e.status === "responded").length,
       respondingCount: employeeStatuses.filter((e) => e.status === "responding").length,
       notRespondedCount: employeeStatuses.filter((e) => e.status === "not_responded").length,
+      questions: surveyType === 'growth' ? questions : [],
+      surveyType,
     })
   } catch (error) {
     return handleError(error, "回答状況の取得に失敗しました", "Get survey response status")

@@ -17,10 +17,24 @@ import {
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Mail, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react"
+import { Mail, CheckCircle2, XCircle, AlertCircle, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Info } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { toast } from "@/lib/toast"
 import api from "@/lib/api-client"
 import type { Survey } from "@/lib/types"
+
+interface GrowthSurveyQuestion {
+  id: number
+  questionText: string
+  questionType: "single_choice" | "free_text"
+  answerType: string
+  displayOrder: number
+}
 
 interface EmployeeStatus {
   id: number
@@ -33,6 +47,7 @@ interface EmployeeStatus {
   responseRate: number
   status: "not_responded" | "responding" | "responded"
   respondedAt: string | null
+  answers?: Record<number, string>
 }
 
 export function SurveyResponseStatusSection() {
@@ -46,6 +61,8 @@ export function SurveyResponseStatusSection() {
   const [isSending, setIsSending] = useState(false)
   const [isClearNotificationsDialogOpen, setIsClearNotificationsDialogOpen] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
+  const [questions, setQuestions] = useState<GrowthSurveyQuestion[]>([])
+  const [surveyType, setSurveyType] = useState<string>("")
   const [stats, setStats] = useState({
     totalEmployees: 0,
     respondedCount: 0,
@@ -70,6 +87,8 @@ export function SurveyResponseStatusSection() {
     } else {
       setEmployees([])
       setSelectedEmployeeIds(new Set())
+      setQuestions([])
+      setSurveyType("")
       setStats({ totalEmployees: 0, respondedCount: 0, respondingCount: 0, notRespondedCount: 0 })
     }
   }, [selectedSurveyId])
@@ -200,8 +219,10 @@ export function SurveyResponseStatusSection() {
           responseRate: emp.responseRate,
           status: emp.status
         })))
-        
+
         setEmployees(data.employees)
+        setQuestions(data.questions || [])
+        setSurveyType(data.surveyType || "")
         setStats({
           totalEmployees: data.totalEmployees || 0,
           respondedCount: data.respondedCount || 0,
@@ -329,7 +350,6 @@ export function SurveyResponseStatusSection() {
   }
 
   const nonResponders = employees.filter((emp) => emp.status === "not_responded" || emp.status === "responding")
-  const selectedNonResponders = nonResponders.filter((emp) => selectedEmployeeIds.has(emp.id))
 
   // Sort employees based on sortConfig
   const sortedEmployees = useMemo(() => {
@@ -738,6 +758,41 @@ export function SurveyResponseStatusSection() {
                           {getSortIcon('responseRate')}
                         </Button>
                       </TableHead>
+                      {/* Growth Survey Question Columns */}
+                      {surveyType === 'growth' && [...questions]
+                        .sort((a, b) => a.displayOrder - b.displayOrder)
+                        .map((q) => {
+                          const questionText = q.questionText || `問題 ${q.id}`
+                          const truncatedText = questionText.length > 10
+                            ? `${questionText.slice(0, 10)}...`
+                            : questionText
+                          const questionTypeLabel = q.questionType === 'free_text' || q.answerType === 'text'
+                            ? '（自由記述）'
+                            : '（選択式）'
+
+                          return (
+                            <TableHead key={q.id} className="text-xs sm:text-sm min-w-[120px] max-w-[180px]">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-1 cursor-help">
+                                      <span className="truncate max-w-[100px]">
+                                        {truncatedText}
+                                      </span>
+                                      <Info className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" className="max-w-[400px] whitespace-pre-wrap">
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-medium">{questionText}</p>
+                                      <p className="text-xs text-muted-foreground">{questionTypeLabel}</p>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableHead>
+                          )
+                        })}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -776,11 +831,49 @@ export function SurveyResponseStatusSection() {
                         </TableCell>
                         <TableCell>
                           <span className="text-xs sm:text-sm font-medium">
-                            {typeof emp.responseRate === 'number' 
-                              ? `${emp.responseRate.toFixed(1)}%` 
+                            {typeof emp.responseRate === 'number'
+                              ? `${emp.responseRate.toFixed(1)}%`
                               : '0.0%'}
                           </span>
                         </TableCell>
+                        {/* Growth Survey Answer Cells */}
+                        {surveyType === 'growth' && [...questions]
+                          .sort((a, b) => a.displayOrder - b.displayOrder)
+                          .map((q) => {
+                            const answer = emp.answers?.[q.id] ?? ""
+                            const isFreeText = q.questionType === 'free_text' || q.answerType === 'text'
+                            const maxDisplayLength = isFreeText ? 20 : 15
+                            const displayAnswer = answer.length > maxDisplayLength
+                              ? `${answer.slice(0, maxDisplayLength)}...`
+                              : answer
+                            const needsTooltip = answer.length > maxDisplayLength
+                            const emptyDisplay = isFreeText ? "（未回答）" : "-"
+
+                            return (
+                              <TableCell key={q.id} className="text-xs sm:text-sm max-w-[180px]">
+                                {answer ? (
+                                  needsTooltip ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="cursor-help truncate block">
+                                            {displayAnswer}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom" className="max-w-[400px] whitespace-pre-wrap">
+                                          <p className="text-sm">{answer}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    <span className="truncate block">{displayAnswer}</span>
+                                  )
+                                ) : (
+                                  <span className="truncate block text-muted-foreground">{emptyDisplay}</span>
+                                )}
+                              </TableCell>
+                            )
+                          })}
                       </TableRow>
                     ))}
                   </TableBody>
