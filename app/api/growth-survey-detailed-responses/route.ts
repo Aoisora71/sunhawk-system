@@ -34,9 +34,9 @@ async function handleGet(request: NextRequest, user: AdminUser) {
       return badRequestResponse("有効なsurveyIdsが必要です")
     }
 
-    // Questions in display_order (all active: single_choice and free_text)
+    // All questions from growth_survey_questions, ordered by display_order
     const allQuestions = await fetchGrowthSurveyQuestions()
-    const questions = allQuestions.filter((q) => q.isActive).map((q) => {
+    const questions = allQuestions.map((q) => {
       const options = getGrowthSurveyOptions(q)
       const answersTexts = options.length > 0
         ? options.map((o) => o.label)

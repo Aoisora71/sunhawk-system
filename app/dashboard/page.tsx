@@ -37,6 +37,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { ArrowUpDown, ArrowUp, ArrowDown, Search, ChevronDown, X } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -2905,9 +2906,20 @@ export default function DashboardPage() {
                               <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">部門</TableHead>
                               <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">職位</TableHead>
                               <TableHead className="whitespace-nowrap px-2 py-2 text-xs font-medium">サーベイ</TableHead>
-                              {growthDetailedData.questions.map((q, idx) => (
-                                <TableHead key={q.id} className="whitespace-nowrap px-2 py-2 text-xs font-medium max-w-[120px]" title={q.questionText}>
-                                  問題{idx + 1}
+                              {growthDetailedData.questions.map((q) => (
+                                <TableHead key={q.id} className="whitespace-nowrap px-2 py-2 text-xs font-medium max-w-[120px]">
+                                  <TooltipProvider>
+                                    <UITooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="cursor-help truncate block max-w-[80px]">
+                                          {q.questionText ? (q.questionText.length > 10 ? q.questionText.slice(0, 10) + "…" : q.questionText) : ""}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className="max-w-[400px] whitespace-pre-wrap">
+                                        {q.questionText}
+                                      </TooltipContent>
+                                    </UITooltip>
+                                  </TooltipProvider>
                                 </TableHead>
                               ))}
                             </TableRow>
@@ -2932,11 +2944,31 @@ export default function DashboardPage() {
                                 <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.departmentName}</TableCell>
                                 <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.jobName}</TableCell>
                                 <TableCell className="px-2 py-2 text-xs whitespace-nowrap">{row.surveyName}</TableCell>
-                                {growthDetailedData.questions.map((q) => (
-                                  <TableCell key={q.id} className="px-2 py-2 text-xs max-w-[200px] break-words align-top">
-                                    {row.answers[q.id] ?? "-"}
-                                  </TableCell>
-                                ))}
+                                {growthDetailedData.questions.map((q) => {
+                                  const answer = row.answers[q.id] ?? ""
+                                  const displayAnswer = answer || "-"
+                                  const needsTooltip = displayAnswer.length > 60
+                                  return (
+                                    <TableCell key={q.id} className="px-2 py-2 text-xs max-w-[200px] break-words align-top">
+                                      {needsTooltip ? (
+                                        <TooltipProvider>
+                                          <UITooltip>
+                                            <TooltipTrigger asChild>
+                                              <span className="cursor-help block">
+                                                {displayAnswer}
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom" className="max-w-[400px] whitespace-pre-wrap">
+                                              {displayAnswer}
+                                            </TooltipContent>
+                                          </UITooltip>
+                                        </TooltipProvider>
+                                      ) : (
+                                        <span>{displayAnswer}</span>
+                                      )}
+                                    </TableCell>
+                                  )
+                                })}
                               </TableRow>
                             ))}
                           </TableBody>
