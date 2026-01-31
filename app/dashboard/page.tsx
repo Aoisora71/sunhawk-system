@@ -2923,18 +2923,6 @@ export default function DashboardPage() {
                                 </TableHead>
                               ))}
                             </TableRow>
-                            <TableRow className="bg-muted/30">
-                              <TableCell className="px-2 py-1 text-xs text-muted-foreground">（選択肢）</TableCell>
-                              <TableCell className="px-2 py-1" />
-                              <TableCell className="px-2 py-1" />
-                              <TableCell className="px-2 py-1" />
-                              <TableCell className="px-2 py-1" />
-                              {growthDetailedData.questions.map((q) => (
-                                <TableCell key={q.id} className="px-2 py-1 text-xs text-muted-foreground align-top max-w-[180px] break-words">
-                                  {q.answersTexts.length > 0 ? q.answersTexts.map((t, i) => `${i + 1}. ${t}`).join(" / ") : "(自由記述)"}
-                                </TableCell>
-                              ))}
-                            </TableRow>
                           </TableHeader>
                           <TableBody>
                             {growthDetailedData.rows.map((row) => (
