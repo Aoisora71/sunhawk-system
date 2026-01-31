@@ -17,29 +17,27 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
     
     let targetSurveyId: number | null = null
     
-    // Initialize category scores with 0 (no additional/bonus points)
-    const categoryScores: Record<string, number> = {
+    // Initialize category scores: growth categories 0; ソシキサーベイ null until we find matching org survey
+    const categoryScores: Record<string, number | null> = {
       "ルール": 0,
       "組織体制": 0,
       "評価制度": 0,
       "週報・会議": 0,
-      "識学サーベイ": 1.5, // Base score for 識学サーベイ (calculated from organizational survey)
+      "ソシキサーベイ": null,
     }
 
     if (surveyIdParam) {
       targetSurveyId = parseInt(surveyIdParam, 10)
       if (Number.isNaN(targetSurveyId)) {
-                // Return zero scores if surveyId is invalid
         return successResponse({ categories: categoryScores })
       }
-          } else {
+    } else {
       const activeSurvey = await getActiveGrowthSurvey()
       if (!activeSurvey) {
-                // Return zero scores if no active survey
         return successResponse({ categories: categoryScores })
       }
       targetSurveyId = activeSurvey.id
-          }
+    }
 
     // Check which columns exist to support both old and new column names
     const columnCheck = await query<{ column_name: string }>(
@@ -67,134 +65,56 @@ async function handleGet(request: NextRequest, user: AuthenticatedUser) {
       [targetSurveyId],
     )
 
-    // Set category scores based on survey results only (no bonus points added)
+    // Set category scores based on survey results only (growth categories only; ソシキ is set below)
     result.rows.forEach((row) => {
       const category = row.category
       if (category) {
-        // Handle both "週報・会議" and "主保・会議"
         const normalizedCategory = category === "主保・会議" ? "週報・会議" : category
-        if (categoryScores.hasOwnProperty(normalizedCategory)) {
-          categoryScores[normalizedCategory] = Number(row.total_sum) || 0
-        } else {
-          // If category doesn't exist in initialized scores, add it
+        if (categoryScores.hasOwnProperty(normalizedCategory) && normalizedCategory !== "ソシキサーベイ") {
           categoryScores[normalizedCategory] = Number(row.total_sum) || 0
         }
       }
     })
 
-    // Calculate 識学サーベイ score based on organizational survey statistics
+    // ソシキサーベイ: organizational survey in the same period as this growth survey (exact start/end match)
+    // Score mapping: 0-45 → 2, 46-54 → 3, 55-69 → 4, 70-84 → 5, 85-100 → 6
     try {
-      // Get the current active organizational survey
-      const orgSurveyQuery = await query<{ id: number }>(
-        `SELECT id FROM surveys 
-         WHERE survey_type = 'organizational' 
-           AND start_date <= CURRENT_DATE 
-           AND (end_date IS NULL OR end_date >= CURRENT_DATE)
-         ORDER BY start_date DESC, created_at DESC
-         LIMIT 1`
+      const growthSurveyRow = await query<{ start_date: string | null; end_date: string | null }>(
+        `SELECT start_date, end_date FROM surveys WHERE id = $1`,
+        [targetSurveyId],
       )
-
-      if (orgSurveyQuery.rows.length > 0) {
-        const orgSurveyId = orgSurveyQuery.rows[0].id
-
-        // Get overall statistics (all employees)
-        const overallQuery = `
-          SELECT 
-            COALESCE(AVG(oss.total_score), 0) as avg_total,
-            COALESCE(AVG(oss.category1_score), 0) as avg_category1,
-            COALESCE(AVG(oss.category7_score), 0) as avg_category7,
-            COUNT(*) as count
-          FROM organizational_survey_summary oss
-          WHERE oss.osid = $1
-        `
-
-        const overallResult = await query<{
-          avg_total: number
-          avg_category1: number
-          avg_category7: number
-          count: number
-        }>(overallQuery, [orgSurveyId])
-
-        // Get manager statistics (jobs.code in ('1', '2', '3'))
-        const managerQuery = `
-          SELECT 
-            COALESCE(AVG(oss.total_score), 0) as avg_total,
-            COALESCE(AVG(oss.category1_score), 0) as avg_category1,
-            COALESCE(AVG(oss.category7_score), 0) as avg_category7,
-            COUNT(*) as count
-          FROM organizational_survey_summary oss
-          LEFT JOIN users u ON oss.uid = u.id
-          LEFT JOIN jobs j ON u.job_id = j.id
-          WHERE oss.osid = $1
-            AND j.code IN ('1', '2', '3')
-        `
-
-        const managerResult = await query<{
-          avg_total: number
-          avg_category1: number
-          avg_category7: number
-          count: number
-        }>(managerQuery, [orgSurveyId])
-
-        const overall = overallResult.rows[0] || {
-          avg_total: 0,
-          avg_category1: 0,
-          avg_category7: 0,
-          count: 0,
+      if (growthSurveyRow.rows.length > 0) {
+        const startDate = growthSurveyRow.rows[0].start_date
+        const endDate = growthSurveyRow.rows[0].end_date
+        if (startDate != null && endDate != null) {
+          const orgSurveyRow = await query<{ id: number }>(
+            `SELECT id FROM surveys
+             WHERE survey_type = 'organizational'
+               AND (start_date::date) = ($1::date)
+               AND (end_date::date) = ($2::date)
+             LIMIT 1`,
+            [startDate, endDate],
+          )
+          if (orgSurveyRow.rows.length > 0) {
+            const orgSurveyId = orgSurveyRow.rows[0].id
+            const avgRow = await query<{ avg_total: number }>(
+              `SELECT COALESCE(AVG(total_score), 0) as avg_total
+               FROM organizational_survey_summary WHERE osid = $1`,
+              [orgSurveyId],
+            )
+            const avg = avgRow.rows[0] ? parseFloat(avgRow.rows[0].avg_total.toString()) : 0
+            let points: number
+            if (avg <= 45) points = 2
+            else if (avg <= 54) points = 3
+            else if (avg < 70) points = 4
+            else if (avg <= 84) points = 5
+            else points = 6
+            categoryScores["ソシキサーベイ"] = points
+          }
         }
-
-        const manager = managerResult.rows[0] || {
-          avg_total: 0,
-          avg_category1: 0,
-          avg_category7: 0,
-          count: 0,
-        }
-
-        const overallAvgTotal = parseFloat(overall.avg_total.toString())
-        const overallAvgCategory1 = parseFloat(overall.avg_category1.toString())
-        const overallAvgCategory7 = parseFloat(overall.avg_category7.toString())
-        const managerAvgTotal = parseFloat(manager.avg_total.toString())
-        const managerAvgCategory1 = parseFloat(manager.avg_category1.toString())
-        const managerAvgCategory7 = parseFloat(manager.avg_category7.toString())
-
-        let shikigakuScore = 1.5 // Base score
-
-        // Condition 1: 全体職員総平均60以上、かつ組織内位置認識・自己評価意識が両方とも60以上 → 1点
-        if (overallAvgTotal >= 60 && overallAvgCategory1 >= 60 && overallAvgCategory7 >= 60) {
-          shikigakuScore += 1.0
-        }
-
-        // Condition 2: 全体職員総平均65以上、かつ組織内位置認識・自己評価意識が両方とも65以上 → 1点
-        if (overallAvgTotal >= 65 && overallAvgCategory1 >= 65 && overallAvgCategory7 >= 65) {
-          shikigakuScore += 1.0
-        }
-
-        // Condition 3: 管理職の平均総点数65以上、かつ組織内位置認識・自己評価意識が両方とも65以上 → 1点
-        if (managerAvgTotal >= 65 && managerAvgCategory1 >= 65 && managerAvgCategory7 >= 65) {
-          shikigakuScore += 1.0
-        }
-
-        // Condition 4: 管理職の平均総点数65以上、かつ組織内位置認識・自己評価意識が両方とも65以上 → 1点
-        // (Same as condition 3, but user requested it separately, so we add it again)
-        if (managerAvgTotal >= 65 && managerAvgCategory1 >= 65 && managerAvgCategory7 >= 65) {
-          shikigakuScore += 1.0
-        }
-
-        // Condition 5: 全体職員総平均70以上、管理職の合計80以上、かつ全体職員の組織内位置認識・自己評価意識の合計平均70以上 → 0.5点
-        const overallAvgCategory1And7 = (overallAvgCategory1 + overallAvgCategory7) / 2
-        if (overallAvgTotal >= 70 && managerAvgTotal >= 80 && overallAvgCategory1And7 >= 70) {
-          shikigakuScore += 0.5
-        }
-
-        // Cap at 6.0 (maximum score)
-        shikigakuScore = Math.min(shikigakuScore, 6.0)
-
-        categoryScores["識学サーベイ"] = shikigakuScore
-      } else {
-        // Keep base score of 1.5 if conditions not met
       }
-    } catch (error) {
-      // Keep base score of 1.5 on error
+    } catch {
+      // Leave ソシキサーベイ as null on error
     }
 
     return successResponse({ categories: categoryScores })

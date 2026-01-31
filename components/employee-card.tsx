@@ -442,7 +442,7 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
             {/*グロースサーベイタブ */}
             <TabsContent value="growth" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label className="text-sm">成長サーベイ</Label>
+                <Label className="text-sm">グロースサーベイ</Label>
                 <Select
                   value={selectedGrowthSurveyId?.toString() || ""}
                   onValueChange={async (value) => {
@@ -451,7 +451,7 @@ function EmployeeCardComponent({ employee, size = "md" }: EmployeeCardProps) {
                   }}
                 >
                   <SelectTrigger className="w-full text-sm h-9 sm:h-10">
-                    <SelectValue placeholder="成長サーベイを選択" />
+                    <SelectValue placeholder="グロースサーベイを選択" />
                   </SelectTrigger>
                   <SelectContent className="!z-[110]">
                     {availableGrowthSurveys.map((survey) => (

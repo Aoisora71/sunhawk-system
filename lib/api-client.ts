@@ -488,6 +488,37 @@ export const growthSurveyResponsesApi = {
       method: 'POST',
     })
   },
+  getDetailedResponses: async (
+    surveyIds: string[],
+    departmentIds: string[],
+    jobIds: string[],
+  ) => {
+    const params = new URLSearchParams()
+    params.append('surveyIds', surveyIds.join(','))
+    if (departmentIds.length > 0) params.append('departmentIds', departmentIds.join(','))
+    if (jobIds.length > 0) params.append('jobIds', jobIds.join(','))
+    return apiFetch<{
+      success: boolean
+      questions: Array<{
+        id: number
+        questionText: string
+        questionType: 'single_choice' | 'free_text'
+        answersTexts: string[]
+      }>
+      surveys: Array<{ id: number; name: string }>
+      employees: Array<{ id: number; name: string; departmentName: string; jobName: string }>
+      rows: Array<{
+        rowNumber: number
+        employeeId: number
+        employeeName: string
+        departmentName: string
+        jobName: string
+        surveyId: number
+        surveyName: string
+        answers: Record<number, string>
+      }>
+    }>(`/growth-survey-detailed-responses?${params.toString()}`)
+  },
 }
 
 
@@ -778,7 +809,7 @@ export const growthSurveyCategoryScoresApi = {
         "組織体制": number
         "評価制度": number
         "週報・会議": number
-        "識学サーベイ": number
+        "ソシキサーベイ": number | null
       }
     }>(`/growth-survey-category-scores${params}`)
   },
